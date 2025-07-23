@@ -25,8 +25,13 @@ app.use(limiter);
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] 
+  origin: process.env.NODE_ENV === 'production'
+    ? [
+        'https://medicine-recognition-system.vercel.app',
+        'https://medicine-recognition-system-git-main-tankuday21.vercel.app',
+        'https://medicine-recognition-system-tankuday21.vercel.app',
+        process.env.CORS_ORIGIN
+      ].filter(Boolean)
     : ['http://localhost:3000'],
   credentials: true
 }));
