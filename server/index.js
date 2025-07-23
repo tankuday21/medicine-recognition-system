@@ -6,6 +6,12 @@ const path = require('path');
 const fs = require('fs-extra');
 require('dotenv').config();
 
+// Validate required environment variables
+if (!process.env.GEMINI_API_KEY) {
+  console.error('❌ GEMINI_API_KEY environment variable is required');
+  process.exit(1);
+}
+
 const medicineRoutes = require('./routes/medicine');
 const uploadRoutes = require('./routes/upload');
 
@@ -91,10 +97,14 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Medicine Recognition Server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔑 Gemini API configured: ${process.env.GEMINI_API_KEY ? 'Yes' : 'No'}`);
+  console.log(`📚 Local medicine database loaded`);
+}).on('error', (err) => {
+  console.error('❌ Server startup error:', err);
+  process.exit(1);
 });
 
 module.exports = app;

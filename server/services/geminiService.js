@@ -5,11 +5,18 @@ const path = require('path');
 class GeminiService {
   constructor() {
     if (!process.env.GEMINI_API_KEY) {
+      console.error('❌ GEMINI_API_KEY is required');
       throw new Error('GEMINI_API_KEY is required');
     }
-    
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
+
+    try {
+      this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+      console.log('✅ Gemini AI service initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize Gemini AI service:', error);
+      throw error;
+    }
   }
 
   /**
