@@ -6,10 +6,16 @@ const path = require('path');
 const fs = require('fs-extra');
 require('dotenv').config();
 
-// Validate required environment variables
+// Log environment status
+console.log('🔍 Starting Medicine Recognition Server...');
+console.log('📊 Environment:', process.env.NODE_ENV || 'development');
+console.log('🔑 Gemini API Key present:', !!process.env.GEMINI_API_KEY);
+console.log('🚪 Port:', process.env.PORT || 3001);
+
+// Validate required environment variables (but don't exit immediately)
 if (!process.env.GEMINI_API_KEY) {
   console.error('❌ GEMINI_API_KEY environment variable is required');
-  process.exit(1);
+  console.error('⚠️ Server will start but AI features will be disabled');
 }
 
 // Try to load routes, but don't fail if they can't be loaded
@@ -132,6 +138,18 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📚 Local medicine database loaded`);
 }).on('error', (err) => {
   console.error('❌ Server startup error:', err);
+  process.exit(1);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error('Stack trace:', error.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
 
