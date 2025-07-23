@@ -27,6 +27,7 @@ app.use(limiter);
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? [
+        'https://mediot.vercel.app',
         'https://medicine-recognition-system.vercel.app',
         'https://medicine-recognition-system-git-main-tankuday21.vercel.app',
         'https://medicine-recognition-system-tankuday21.vercel.app',
