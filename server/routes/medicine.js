@@ -1,8 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const medicineService = require('../services/medicineService');
-const geminiService = require('../services/geminiService');
-const comprehensiveMedicineService = require('../services/comprehensiveMedicineService');
+
+// Try to load services, but don't fail if they can't be loaded
+let geminiService, medicineService, comprehensiveMedicineService;
+
+try {
+  geminiService = require('../services/geminiService');
+  medicineService = require('../services/medicineService');
+  comprehensiveMedicineService = require('../services/comprehensiveMedicineService');
+  console.log('✅ All services loaded successfully');
+} catch (error) {
+  console.error('❌ Error loading services:', error.message);
+  // Services will be null, and we'll handle this in the routes
+}
 
 // Phase 1: Quick medicine name verification (single image)
 router.post('/verify-name', async (req, res) => {
@@ -17,6 +27,14 @@ router.post('/verify-name', async (req, res) => {
     }
 
     console.log('🔍 Starting quick medicine name verification...');
+
+    if (!geminiService) {
+      return res.status(500).json({
+        error: 'Service unavailable',
+        message: 'Gemini AI service is not available'
+      });
+    }
+
     const verificationResult = await geminiService.quickMedicineVerification(imagePath || imageData);
 
     if (!verificationResult.success) {

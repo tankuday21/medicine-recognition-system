@@ -11,7 +11,7 @@ class GeminiService {
 
     try {
       this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+      this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
       console.log('✅ Gemini AI service initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize Gemini AI service:', error);
@@ -801,7 +801,7 @@ class GeminiService {
       `;
 
       // Generate content with image and prompt
-      console.log('🤖 Sending request to gemini-2.5-pro...');
+      console.log('🤖 Sending request to Gemini...');
       const result = await this.model.generateContent([prompt, imageData]);
       const response = await result.response;
       const text = response.text();

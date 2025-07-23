@@ -12,8 +12,17 @@ if (!process.env.GEMINI_API_KEY) {
   process.exit(1);
 }
 
-const medicineRoutes = require('./routes/medicine');
-const uploadRoutes = require('./routes/upload');
+// Try to load routes, but don't fail if they can't be loaded
+let medicineRoutes, uploadRoutes;
+
+try {
+  medicineRoutes = require('./routes/medicine');
+  uploadRoutes = require('./routes/upload');
+  console.log('✅ Routes loaded successfully');
+} catch (error) {
+  console.error('❌ Error loading routes:', error.message);
+  console.error('Stack trace:', error.stack);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -51,9 +60,28 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'uploads');
 fs.ensureDirSync(uploadsDir);
 
-// Routes
-app.use('/api/medicine', medicineRoutes);
-app.use('/api/upload', uploadRoutes);
+// Routes (only if they loaded successfully)
+if (medicineRoutes) {
+  app.use('/api/medicine', medicineRoutes);
+} else {
+  app.use('/api/medicine', (req, res) => {
+    res.status(503).json({
+      error: 'Service unavailable',
+      message: 'Medicine analysis service is temporarily unavailable'
+    });
+  });
+}
+
+if (uploadRoutes) {
+  app.use('/api/upload', uploadRoutes);
+} else {
+  app.use('/api/upload', (req, res) => {
+    res.status(503).json({
+      error: 'Service unavailable',
+      message: 'Upload service is temporarily unavailable'
+    });
+  });
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
