@@ -38,7 +38,7 @@ app.get('/api/test-gemini', async (req, res) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
     // Try different model names
-    const models = ['gemini-1.5-pro', 'gemini-pro', 'gemini-pro-vision'];
+    const models = ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-pro', 'gemini-pro-vision'];
     const results = {};
     
     for (const modelName of models) {

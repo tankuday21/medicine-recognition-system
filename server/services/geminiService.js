@@ -11,15 +11,9 @@ class GeminiService {
 
     try {
       this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      // Try gemini-1.5-pro first, fallback to gemini-pro if needed
-      try {
-        this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-        console.log('✅ Gemini AI service initialized with gemini-1.5-pro');
-      } catch (modelError) {
-        console.warn('⚠️ gemini-1.5-pro not available, trying gemini-pro...');
-        this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
-        console.log('✅ Gemini AI service initialized with gemini-pro');
-      }
+      // Use gemini-2.5-pro for best results
+      this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
+      console.log('✅ Gemini AI service initialized with gemini-2.5-pro');
     } catch (error) {
       console.error('❌ Failed to initialize Gemini AI service:', error);
       throw error;
