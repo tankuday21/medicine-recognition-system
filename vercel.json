@@ -1,22 +1,9 @@
 {
   "version": 2,
   "name": "mediot-app",
-  "builds": [
-    {
-      "src": "client/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
-    },
-    {
-      "src": "server/index.js",
-      "use": "@vercel/node",
-      "config": {
-        "maxDuration": 30
-      }
-    }
-  ],
+  "buildCommand": "cd client && npm install && npm run build",
+  "outputDirectory": "client/build",
+  "installCommand": "npm install --prefix client && npm install --prefix server",
   "env": {
     "NODE_ENV": "production"
   },
@@ -101,14 +88,19 @@
   ],
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/server/index.js"
+      "source": "/api/:path*",
+      "destination": "/api/server"
     },
     {
       "source": "/health",
-      "destination": "/server/index.js"
+      "destination": "/api/server"
     }
   ],
+  "functions": {
+    "api/server.js": {
+      "maxDuration": 30
+    }
+  },
   "redirects": [
     {
       "source": "/home",
