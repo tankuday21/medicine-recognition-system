@@ -17,20 +17,6 @@
       }
     }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/server/index.js"
-    },
-    {
-      "src": "/health",
-      "dest": "/server/index.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/client/build/index.html"
-    }
-  ],
   "env": {
     "NODE_ENV": "production"
   },
@@ -116,6 +102,10 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
+      "destination": "/server/index.js"
+    },
+    {
+      "source": "/health",
       "destination": "/server/index.js"
     }
   ],
