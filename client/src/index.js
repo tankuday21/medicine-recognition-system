@@ -12,7 +12,7 @@ import './i18n';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-vercel-app.vercel.app' 
+  ? 'https://mediot-08fq.onrender.com' 
   : 'http://localhost:3003';
 
 axios.defaults.baseURL = API_BASE_URL;
