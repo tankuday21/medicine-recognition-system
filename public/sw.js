@@ -1,10 +1,10 @@
 // Service Worker for Premium Mobile UI
 // Handles caching, offline functionality, and background sync
 
-const CACHE_NAME = 'mediot-premium-ui-v1';
-const STATIC_CACHE_NAME = 'mediot-static-v1';
-const DYNAMIC_CACHE_NAME = 'mediot-dynamic-v1';
-const API_CACHE_NAME = 'mediot-api-v1';
+const CACHE_NAME = 'mediot-premium-ui-v2';
+const STATIC_CACHE_NAME = 'mediot-static-v2';
+const DYNAMIC_CACHE_NAME = 'mediot-dynamic-v2';
+const API_CACHE_NAME = 'mediot-api-v2';
 
 // Static assets to cache immediately
 const STATIC_ASSETS = [
