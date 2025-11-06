@@ -92,6 +92,10 @@
     {
       "source": "/health",
       "destination": "/api/server"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "functions": {
