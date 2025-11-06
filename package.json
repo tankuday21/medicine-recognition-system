@@ -1,0 +1,46 @@
+{
+  "name": "medicine-recognition-system",
+  "version": "1.0.0",
+  "description": "AI-powered medicine recognition and information system",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install",
+    "quick-start": "node start-dev.js",
+    "setup": "npm run install-all && echo '✅ Setup complete! Run: npm run quick-start'",
+    "deploy": "node scripts/deploy.js",
+    "deploy:staging": "NODE_ENV=staging node scripts/deploy.js",
+    "deploy:production": "NODE_ENV=production node scripts/deploy.js",
+    "vercel:build": "npm run build",
+    "vercel:dev": "vercel dev",
+    "health-check": "curl -f http://localhost:3001/health || exit 1",
+    "lint": "npm run lint:client && npm run lint:server",
+    "lint:client": "cd client && npm run lint",
+    "lint:server": "cd server && npm run lint",
+    "test": "node test-startup.js",
+    "test:full": "npm run test:client && npm run test:server",
+    "test:client": "cd client && npm test -- --coverage --watchAll=false",
+    "test:server": "cd server && npm test",
+    "security-audit": "npm audit && cd client && npm audit && cd ../server && npm audit"
+  },
+  "keywords": [
+    "medicine",
+    "recognition",
+    "ai",
+    "healthcare",
+    "computer-vision"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@cloudinary/react": "^1.14.3",
+    "@cloudinary/url-gen": "^1.22.0"
+  }
+}

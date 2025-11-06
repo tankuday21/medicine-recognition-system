@@ -1,0 +1,106 @@
+[
+  {
+    "brandName": "Tylenol",
+    "genericName": "Acetaminophen",
+    "activeIngredient": "Acetaminophen",
+    "strength": "500mg",
+    "dosageForm": "Tablet",
+    "manufacturer": "Johnson & Johnson",
+    "ndc": "50580-488-01",
+    "uses": "Pain reliever and fever reducer. Used to treat mild to moderate pain and reduce fever.",
+    "dosageInstructions": "Adults and children 12 years and over: Take 2 tablets every 4-6 hours as needed. Do not exceed 8 tablets in 24 hours unless directed by a doctor.",
+    "sideEffects": "Rare side effects may include allergic reactions, skin rash, or liver damage with overdose.",
+    "warnings": [
+      "Do not exceed recommended dosage",
+      "Do not use with other acetaminophen-containing products",
+      "Consult doctor if pain persists for more than 10 days",
+      "May cause liver damage if taken in excess"
+    ],
+    "contraindications": "Do not use if allergic to acetaminophen or if you have severe liver disease.",
+    "drugInteractions": "May interact with warfarin and other blood thinners. Consult healthcare provider.",
+    "storageInstructions": "Store at room temperature, away from heat and moisture. Keep out of reach of children.",
+    "physicalCharacteristics": {
+      "shape": "Caplet",
+      "color": "White",
+      "markings": "TYLENOL 500"
+    }
+  },
+  {
+    "brandName": "Advil",
+    "genericName": "Ibuprofen",
+    "activeIngredient": "Ibuprofen",
+    "strength": "200mg",
+    "dosageForm": "Tablet",
+    "manufacturer": "Pfizer",
+    "ndc": "0573-0164-40",
+    "uses": "Pain reliever, fever reducer, and anti-inflammatory. Used for headaches, muscle aches, arthritis, backache, toothaches, and menstrual cramps.",
+    "dosageInstructions": "Adults and children 12 years and over: Take 1-2 tablets every 4-6 hours as needed. Do not exceed 6 tablets in 24 hours unless directed by a doctor.",
+    "sideEffects": "May cause stomach upset, heartburn, dizziness, or allergic reactions. Serious side effects may include stomach bleeding or kidney problems.",
+    "warnings": [
+      "Take with food or milk to reduce stomach upset",
+      "Do not use if you have a history of stomach ulcers",
+      "May increase risk of heart attack or stroke",
+      "Do not use during last 3 months of pregnancy"
+    ],
+    "contraindications": "Do not use if allergic to ibuprofen or other NSAIDs, or if you have severe kidney or liver disease.",
+    "drugInteractions": "May interact with blood thinners, ACE inhibitors, diuretics, and lithium. Consult healthcare provider.",
+    "storageInstructions": "Store at room temperature, away from heat and moisture. Keep out of reach of children.",
+    "physicalCharacteristics": {
+      "shape": "Round",
+      "color": "Brown/Orange",
+      "markings": "ADVIL"
+    }
+  },
+  {
+    "brandName": "Aspirin",
+    "genericName": "Acetylsalicylic Acid",
+    "activeIngredient": "Acetylsalicylic Acid",
+    "strength": "325mg",
+    "dosageForm": "Tablet",
+    "manufacturer": "Bayer",
+    "ndc": "12843-128-01",
+    "uses": "Pain reliever, fever reducer, anti-inflammatory, and blood thinner. Used for headaches, muscle pain, arthritis, and heart attack prevention.",
+    "dosageInstructions": "Adults: Take 1-2 tablets every 4 hours as needed for pain. For heart protection, take 1 tablet daily as directed by doctor.",
+    "sideEffects": "May cause stomach upset, heartburn, nausea, or allergic reactions. Serious side effects include stomach bleeding and Reye's syndrome in children.",
+    "warnings": [
+      "Do not give to children under 16 years due to Reye's syndrome risk",
+      "Take with food to reduce stomach upset",
+      "May increase bleeding risk",
+      "Stop use and consult doctor if ringing in ears occurs"
+    ],
+    "contraindications": "Do not use if allergic to aspirin, have bleeding disorders, or stomach ulcers.",
+    "drugInteractions": "May interact with blood thinners, diabetes medications, and other NSAIDs. Consult healthcare provider.",
+    "storageInstructions": "Store at room temperature in a dry place. Keep out of reach of children.",
+    "physicalCharacteristics": {
+      "shape": "Round",
+      "color": "White",
+      "markings": "BAYER"
+    }
+  },
+  {
+    "brandName": "Benadryl",
+    "genericName": "Diphenhydramine",
+    "activeIngredient": "Diphenhydramine HCl",
+    "strength": "25mg",
+    "dosageForm": "Capsule",
+    "manufacturer": "Johnson & Johnson",
+    "ndc": "50580-506-01",
+    "uses": "Antihistamine used for allergies, hay fever, common cold symptoms, and as a sleep aid.",
+    "dosageInstructions": "Adults and children 12 years and over: Take 1-2 capsules every 4-6 hours as needed. Do not exceed 6 capsules in 24 hours.",
+    "sideEffects": "May cause drowsiness, dizziness, dry mouth, blurred vision, or constipation.",
+    "warnings": [
+      "May cause drowsiness - avoid driving or operating machinery",
+      "Do not use with alcohol or other sedating medications",
+      "Do not exceed recommended dosage",
+      "Consult doctor before use if you have glaucoma, enlarged prostate, or breathing problems"
+    ],
+    "contraindications": "Do not use if allergic to diphenhydramine or if you have severe asthma or COPD.",
+    "drugInteractions": "May interact with sedatives, tranquilizers, and MAO inhibitors. Consult healthcare provider.",
+    "storageInstructions": "Store at room temperature, away from light and moisture. Keep out of reach of children.",
+    "physicalCharacteristics": {
+      "shape": "Capsule",
+      "color": "Pink and White",
+      "markings": "BENADRYL"
+    }
+  }
+]
