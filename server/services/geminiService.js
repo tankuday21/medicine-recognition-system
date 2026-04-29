@@ -196,16 +196,16 @@ class GeminiService {
 
       const prompt = `
         You are a premium medical news editor. I will provide you with a list of ${articles.length} news articles.
-        Your task is to create an extremely concise, "one-liner" summary for each one (strictly between 5 to 8 words).
+        Your task is to create a professional medical summary for each one (strictly between 42 to 48 words).
         
         Style Guidelines:
-        1. Ultra-Short: Must be between 5 and 8 words maximum.
-        2. Impactful: Capture only the most critical "bottom line" health takeaway.
-        3. Professional: Keep it medical but very punchy.
-        4. Mobile-First: Designed for quick scanning on a phone screen.
+        1. Professional Brief: Aim for a length between 42 and 48 words for each summary.
+        2. Engaging & Informative: Capture the critical "bottom line" health takeaway with enough context to be useful.
+        3. Medical Quality: Maintain a high-end medical journal tone.
+        4. Mobile-First: Structured for readability on phone screens.
 
         Return ONLY a JSON array of strings, where each string corresponds to the summary of the article at that index.
-        Example: ["New antibody shows promise in Alzheimer's treatment.", "FDA approves faster acting diabetes insulin drug.", "Daily exercise reduces heart disease risk significantly."]
+        Example: ["Researchers have identified a new antibody treatment that significantly slows memory decline in early-stage Alzheimer's patients. The phase three clinical trials demonstrated a thirty percent improvement over eighteen months. This breakthrough drug is currently under priority review by the FDA for potential clinical use by next year."]
 
         Articles:
         ${articlesText}
