@@ -8,6 +8,7 @@ import {
   DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const ConversationHistory = ({ onConversationSelect }) => {
   const [conversations, setConversations] = useState([]);
@@ -17,6 +18,7 @@ const ConversationHistory = ({ onConversationSelect }) => {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { isAuthenticated } = useAuth();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -77,7 +79,7 @@ const ConversationHistory = ({ onConversationSelect }) => {
     if (!messages.length) return;
 
     const conversationText = messages.map(msg => 
-      `[${new Date(msg.createdAt).toLocaleString()}] ${msg.sender === 'user' ? 'You' : 'Mediot Assistant'}: ${msg.content}`
+      `[${new Date(msg.createdAt).toLocaleString()}] ${msg.sender === 'user' ? t('common.you') : t('chat.mediotAssistant')}: ${msg.content}`
     ).join('\n\n');
 
     const blob = new Blob([conversationText], { type: 'text/plain' });
@@ -107,9 +109,9 @@ const ConversationHistory = ({ onConversationSelect }) => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="text-center">
           <ChatBubbleLeftRightIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Sign In Required</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{t('chat.signInRequired')}</h3>
           <p className="text-gray-600">
-            Please sign in to view your conversation history and manage your chats.
+            {t('chat.signInDesc')}
           </p>
         </div>
       </div>
@@ -120,7 +122,7 @@ const ConversationHistory = ({ onConversationSelect }) => {
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Conversation History</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('chat.conversationHistory')}</h2>
           <ChatBubbleLeftRightIcon className="h-5 w-5 text-gray-400" />
         </div>
 
@@ -133,7 +135,7 @@ const ConversationHistory = ({ onConversationSelect }) => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search conversations..."
+            placeholder={t('chat.searchPlaceholder')}
             className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -142,12 +144,12 @@ const ConversationHistory = ({ onConversationSelect }) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-gray-200">
         {/* Conversations List */}
         <div className="p-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Your Conversations</h3>
+          <h3 className="text-sm font-medium text-gray-700 mb-3">{t('chat.yourConversations')}</h3>
           
           {isLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-sm text-gray-500 mt-2">Loading conversations...</p>
+              <p className="text-sm text-gray-500 mt-2">{t('chat.loadingConversations')}</p>
             </div>
           ) : filteredConversations.length > 0 ? (
             <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -168,7 +170,7 @@ const ConversationHistory = ({ onConversationSelect }) => {
                       </p>
                       <div className="flex items-center space-x-2 mt-1">
                         <span className="text-xs text-gray-500">
-                          {conversation.messageCount} messages
+                          {conversation.messageCount} {t('chat.messages')}
                         </span>
                         <span className="text-xs text-gray-400">•</span>
                         <span className="text-xs text-gray-500">
@@ -185,7 +187,7 @@ const ConversationHistory = ({ onConversationSelect }) => {
             <div className="text-center py-8">
               <ChatBubbleLeftRightIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
               <p className="text-sm text-gray-500">
-                {searchQuery ? 'No conversations found' : 'No conversations yet'}
+                {searchQuery ? t('chat.noConversationsFound') : t('chat.noConversationsYet')}
               </p>
             </div>
           )}
@@ -196,21 +198,21 @@ const ConversationHistory = ({ onConversationSelect }) => {
           {selectedConversation ? (
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-gray-700">Messages</h3>
+                <h3 className="text-sm font-medium text-gray-700">{t('chat.messages')}</h3>
                 <button
                   onClick={() => exportConversation(selectedConversation)}
                   disabled={!messages.length}
                   className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
                   <DocumentArrowDownIcon className="h-4 w-4" />
-                  <span>Export</span>
+                  <span>{t('chat.export')}</span>
                 </button>
               </div>
 
               {isLoadingMessages ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-sm text-gray-500 mt-2">Loading messages...</p>
+                  <p className="text-sm text-gray-500 mt-2">{t('chat.loadingMessages')}</p>
                 </div>
               ) : messages.length > 0 ? (
                 <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -238,14 +240,14 @@ const ConversationHistory = ({ onConversationSelect }) => {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-sm text-gray-500">No messages in this conversation</p>
+                  <p className="text-sm text-gray-500">{t('chat.noMessages')}</p>
                 </div>
               )}
             </div>
           ) : (
             <div className="text-center py-8">
               <ChatBubbleLeftRightIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">Select a conversation to view messages</p>
+              <p className="text-sm text-gray-500">{t('chat.selectConversation')}</p>
             </div>
           )}
         </div>

@@ -9,7 +9,7 @@ const reportSchema = new mongoose.Schema({
   fileName: String,
   fileType: {
     type: String,
-    enum: ['pdf', 'jpg', 'jpeg', 'png', 'gif'],
+    enum: ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'],
     required: true
   },
   fileSize: Number,
@@ -30,6 +30,15 @@ const reportSchema = new mongoose.Schema({
     type: String, 
     enum: ['pending', 'processing', 'processed', 'failed'], 
     default: 'pending' 
+  },
+  processingStep: {
+    type: String,
+    enum: ['uploading', 'extracting_text', 'basic_analysis', 'detailed_analysis', 'finalizing', 'completed'],
+    default: 'uploading'
+  },
+  processingProgress: {
+    type: Number,
+    default: 0
   },
   errorMessage: String,
   reportType: {

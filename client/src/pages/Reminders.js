@@ -1,60 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import ReminderForm from '../components/Reminders/ReminderForm';
-import NotificationSettings from '../components/Reminders/NotificationSettings';
-import NotificationTest from '../components/Reminders/NotificationTest';
-import AdherenceCalendar from '../components/Reminders/AdherenceCalendar';
+import ReminderSettingsModal from '../components/Reminders/ReminderSettingsModal';
+import ConfirmModal from '../components/Common/ConfirmModal';
+import { useLayout } from '../contexts/LayoutContext';
 import notificationService from '../services/notificationService';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
+import { useNavigate } from 'react-router-dom';
 import {
   ClockIcon,
   PlusIcon,
   CalendarDaysIcon,
-  ChartBarIcon,
   BellIcon,
   CheckCircleIcon,
-  XCircleIcon,
-  ExclamationCircleIcon,
-  CogIcon,
-  PencilIcon,
-  TrashIcon
+  XMarkIcon,
+  ChevronRightIcon,
+  SunIcon,
+  MoonIcon,
+  SparklesIcon,
+  ArrowLeftIcon,
+  Cog6ToothIcon
 } from '@heroicons/react/24/outline';
+import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid';
 
 const Reminders = () => {
+  const { t } = useLanguage();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('today');
   const [showForm, setShowForm] = useState(false);
   const [editingReminder, setEditingReminder] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [reminders, setReminders] = useState([]);
   const [todaysSchedule, setTodaysSchedule] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [conflicts, setConflicts] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [notificationPermission, setNotificationPermission] = useState(null);
-  const { isAuthenticated } = useAuth();
 
-  const tabs = [
-    { id: 'today', name: 'Today', icon: CalendarDaysIcon },
-    { id: 'all', name: 'All Reminders', icon: ClockIcon },
-    { id: 'calendar', name: 'Calendar', icon: CalendarDaysIcon },
-    { id: 'stats', name: 'Statistics', icon: ChartBarIcon },
-    { id: 'settings', name: 'Settings', icon: CogIcon }
-  ];
+  // Custom Delete Modal State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [reminderToDelete, setReminderToDelete] = useState(null);
+  const { setHideBottomNav } = useLayout();
+
+  // Hide bottom nav when modal is open
+  useEffect(() => {
+    setHideBottomNav(showForm);
+    return () => setHideBottomNav(false);
+  }, [showForm, setHideBottomNav]);
+
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Initialize notification permission status
-      const permissionStatus = notificationService.getPermissionStatus();
-      setNotificationPermission(permissionStatus);
-
       if (activeTab === 'today') {
         loadTodaysSchedule();
-      } else if (activeTab === 'all') {
+      } else {
         loadReminders();
-        loadConflicts();
-      } else if (activeTab === 'stats') {
-        loadStats();
       }
     }
   }, [isAuthenticated, activeTab]);
@@ -63,31 +62,15 @@ const Reminders = () => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/reminders/today', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-
       const data = await response.json();
       if (data.success) {
         setTodaysSchedule(data.data);
-
-        // Schedule notifications if permission is granted
-        if (notificationPermission?.isGranted) {
-          const scheduleResult = notificationService.scheduleNotifications(data.data);
-          if (scheduleResult.success) {
-            console.log(`[SUCCESS] ${scheduleResult.message}`);
-          }
-        } else if (notificationPermission?.canRequest) {
-          // Show notification permission prompt if not yet requested
-          console.log('[INFO] Notification permission not granted - user can enable in settings');
-        }
-      } else {
-        setError(data.message);
+        notificationService.scheduleNotifications(data.data);
       }
     } catch (error) {
-      console.error('Failed to load today\'s schedule:', error);
-      setError('Failed to load today\'s schedule');
+      console.error('Failed to load schedule:', error);
     } finally {
       setIsLoading(false);
     }
@@ -96,641 +79,428 @@ const Reminders = () => {
   const loadReminders = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/reminders?isActive=true', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const response = await fetch('/api/reminders', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-
       const data = await response.json();
       if (data.success) {
-        setReminders(data.data.reminders);
-      } else {
-        setError(data.message);
+        // API returns paginated data: { reminders: [], total: ... }
+        const remindersList = data.data.reminders || (Array.isArray(data.data) ? data.data : []);
+        setReminders(remindersList);
       }
     } catch (error) {
       console.error('Failed to load reminders:', error);
-      setError('Failed to load reminders');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadStats = async () => {
-    setIsLoading(true);
+  const markAsTaken = async (reminderId, scheduleTime) => {
     try {
-      const response = await fetch('/api/reminders/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setStats(data.data);
-      } else {
-        setError(data.message);
-      }
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-      setError('Failed to load statistics');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadConflicts = async () => {
-    try {
-      const response = await fetch('/api/reminders/conflicts', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setConflicts(data.data);
-      }
-    } catch (error) {
-      console.error('Failed to load conflicts:', error);
-    }
-  };
-
-  const handleNotificationPermissionChange = (permission) => {
-    setNotificationPermission(permission);
-  };
-
-  const handleCreateReminder = async (reminderData) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/reminders', {
+      await fetch(`/api/reminders/${reminderId}/take`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(reminderData)
+        body: JSON.stringify({ scheduledTime: scheduleTime })
       });
-
-      const data = await response.json();
-      if (data.success) {
-        setShowForm(false);
-        setEditingReminder(null);
-        // Refresh current tab data
-        if (activeTab === 'today') {
-          loadTodaysSchedule();
-        } else if (activeTab === 'all') {
-          loadReminders();
-        }
-      } else {
-        setError(data.message);
-      }
+      loadTodaysSchedule();
     } catch (error) {
-      console.error('Failed to create reminder:', error);
-      setError('Failed to create reminder');
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to mark as taken:', error);
     }
   };
 
-  const handleEditReminder = (reminder) => {
-    setEditingReminder(reminder);
-    setShowForm(true);
+  const handleFormSuccess = () => {
+    setShowForm(false);
+    setEditingReminder(null);
+    loadReminders();
+    loadTodaysSchedule();
   };
 
-  const handleUpdateReminder = async (reminderData) => {
+  // Group schedule by time of day
+  const groupedSchedule = todaysSchedule.reduce((acc, item) => {
+    const hour = new Date(item.scheduledTime).getHours();
+    let period = 'morning';
+    if (hour >= 12 && hour < 17) period = 'afternoon';
+    else if (hour >= 17) period = 'evening';
+
+    if (!acc[period]) acc[period] = [];
+    acc[period].push(item);
+    return acc;
+  }, {});
+
+  const periods = [
+    { id: 'morning', label: t('reminders.morning') || 'Morning', icon: SunIcon, color: 'text-amber-500' },
+    { id: 'afternoon', label: t('reminders.afternoon') || 'Afternoon', icon: SunIcon, color: 'text-orange-500' },
+    { id: 'evening', label: t('reminders.evening') || 'Evening', icon: MoonIcon, color: 'text-indigo-500' }
+  ];
+
+  const tabs = [
+    { id: 'today', label: t('reminders.today') || 'Today' },
+    { id: 'all', label: t('reminders.all') || 'All' }
+  ];
+
+  const handleSaveReminder = async (reminderData) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/reminders/${editingReminder._id}`, {
-        method: 'PUT',
+      const url = editingReminder
+        ? `/api/reminders/${editingReminder._id}`
+        : '/api/reminders';
+
+      const method = editingReminder ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(reminderData)
       });
 
       const data = await response.json();
+
       if (data.success) {
-        setShowForm(false);
-        setEditingReminder(null);
-        // Refresh current tab data
-        if (activeTab === 'today') {
-          loadTodaysSchedule();
-        } else if (activeTab === 'all') {
-          loadReminders();
-        }
+        handleFormSuccess();
       } else {
-        setError(data.message);
+        console.error('Failed to save reminder:', data.message);
+        alert(data.message || 'Failed to save reminder');
       }
     } catch (error) {
-      console.error('Failed to update reminder:', error);
-      setError('Failed to update reminder');
+      console.error('Error saving reminder:', error);
+      alert('An error occurred while saving the reminder');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDeleteReminder = async (reminderId) => {
-    if (!window.confirm('Are you sure you want to delete this reminder?')) {
-      return;
-    }
+  const handleDeleteReminder = (reminderId) => {
+    setReminderToDelete(reminderId);
+    setShowDeleteConfirm(true);
+  };
 
+  const confirmDelete = async () => {
+    if (!reminderToDelete) return;
+
+    setIsLoading(true);
     try {
-      const response = await fetch(`/api/reminders/${reminderId}`, {
+      const response = await fetch(`/api/reminders/${reminderToDelete}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-
       const data = await response.json();
+
       if (data.success) {
-        // Refresh current tab data
-        if (activeTab === 'today') {
-          loadTodaysSchedule();
-        } else if (activeTab === 'all') {
-          loadReminders();
-        }
+        handleFormSuccess();
       } else {
-        setError(data.message);
+        alert(data.message || 'Failed to delete reminder');
       }
     } catch (error) {
-      console.error('Failed to delete reminder:', error);
-      setError('Failed to delete reminder');
+      console.error('Error deleting reminder:', error);
+      alert('An error occurred while deleting the reminder');
+    } finally {
+      setIsLoading(false);
+      setShowDeleteConfirm(false);
+      setReminderToDelete(null);
     }
   };
 
-  const handleExportData = async () => {
-    try {
-      // Get all reminders and stats
-      const remindersResponse = await fetch('/api/reminders', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      const statsResponse = await fetch('/api/reminders/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
 
-      const remindersData = await remindersResponse.json();
-      const statsData = await statsResponse.json();
-
-      const exportData = {
-        exportDate: new Date().toISOString(),
-        reminders: remindersData.success ? remindersData.data.reminders : [],
-        statistics: statsData.success ? statsData.data : null
-      };
-
-      // Create and download JSON file
-      const dataStr = JSON.stringify(exportData, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `mediot-reminders-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Failed to export data:', error);
-      setError('Failed to export data');
-    }
-  };
-
-  const handleLogDose = async (reminderId, scheduledTime, status) => {
-    try {
-      const response = await fetch(`/api/reminders/${reminderId}/log`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          scheduledTime,
-          status,
-          takenTime: status === 'taken' ? new Date().toISOString() : null
-        })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        // Refresh today's schedule
-        loadTodaysSchedule();
-      } else {
-        setError(data.message);
-      }
-    } catch (error) {
-      console.error('Failed to log dose:', error);
-      setError('Failed to log dose');
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'taken':
-        return <CheckCircleIcon className="h-5 w-5 text-green-500" />;
-      case 'missed':
-        return <XCircleIcon className="h-5 w-5 text-red-500" />;
-      case 'skipped':
-        return <ExclamationCircleIcon className="h-5 w-5 text-yellow-500" />;
-      default:
-        return <ClockIcon className="h-5 w-5 text-gray-400" />;
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'taken':
-        return 'bg-green-50 text-green-700 border-green-200';
-      case 'missed':
-        return 'bg-red-50 text-red-700 border-red-200';
-      case 'skipped':
-        return 'bg-yellow-50 text-yellow-700 border-yellow-200';
-      default:
-        return 'bg-gray-50 text-gray-700 border-gray-200';
-    }
-  };
-
-  const formatTime = (dateString) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <ClockIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Sign In Required</h2>
-          <p className="text-gray-600">
-            Please sign in to manage your medication reminders and track your adherence.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Medication Reminders</h1>
-          <p className="text-gray-600">Manage your medication schedule and track adherence</p>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-6">
+      {/* Header Stats */}
+      <div className="px-4 pt-6 pb-2">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-gray-600 dark:text-gray-400"
+              aria-label="Go back"
+            >
+              <ArrowLeftIcon className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                {t('reminders.title') || 'Reminders'}
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('reminders.manageDaily') || 'Manage your daily medication'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-2.5 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl shadow-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all"
+            aria-label="Settings"
+          >
+            <Cog6ToothIcon className="w-6 h-6" />
+          </button>
+        </div>
+        <div className="flex gap-3">
+          <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl p-4 border border-gray-100 dark:border-slate-800">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-950/50 rounded-2xl flex items-center justify-center">
+                <ClockIcon className="w-6 h-6 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{todaysSchedule.length}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('reminders.todayDoses') || 'Today\'s doses'}</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl p-4 border border-gray-100 dark:border-slate-800">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-950/50 rounded-2xl flex items-center justify-center">
+                <CheckCircleIcon className="w-6 h-6 text-emerald-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {todaysSchedule.filter(s => s.taken).length}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('reminders.taken') || 'Taken'}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="flex space-x-3">
-          <button
-            onClick={handleExportData}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>Export</span>
-          </button>
-          
-          <button
-            onClick={() => {
-              setEditingReminder(null);
-              setShowForm(true);
-            }}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <PlusIcon className="h-5 w-5" />
-            <span>New Reminder</span>
-          </button>
+      </div>
+
+      {/* Settings Modal */}
+      <ReminderSettingsModal 
+        isOpen={showSettings} 
+        onClose={() => setShowSettings(false)} 
+      />
+
+      {/* Tabs */}
+      <div className="px-4 py-3">
+        <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === tab.id
+                ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-500 dark:text-gray-400'
+                }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {/* Reminder Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-screen overflow-y-auto">
-            <ReminderForm
-              editingReminder={editingReminder}
-              onSave={editingReminder ? handleUpdateReminder : handleCreateReminder}
-              onCancel={() => {
-                setShowForm(false);
-                setEditingReminder(null);
-              }}
-              isLoading={isLoading}
-            />
+      {/* Content */}
+      <div className="px-4">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-8 h-8 border-2 border-blue-100 border-t-blue-500 rounded-full animate-spin" />
           </div>
-        </div>
-      )}
+        ) : activeTab === 'today' ? (
+          /* Today's Schedule */
+          <div className="space-y-6">
+            {periods.map((period) => {
+              const items = groupedSchedule[period.id] || [];
+              if (items.length === 0) return null;
 
-      {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors ${activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                <tab.icon className="h-4 w-4" />
-                <span>{tab.name}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-6">
-          {/* Today's Schedule */}
-          {activeTab === 'today' && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Today's Schedule</h2>
-
-              {isLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-2">Loading schedule...</p>
-                </div>
-              ) : todaysSchedule.length > 0 ? (
-                <div className="space-y-3">
-                  {todaysSchedule.map((item, index) => (
-                    <div
-                      key={index}
-                      className={`p-4 border rounded-lg ${getStatusColor(item.status)}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          {getStatusIcon(item.status)}
-                          <div>
-                            <h3 className="font-medium">{item.medicineName}</h3>
-                            <p className="text-sm opacity-75">
-                              {item.dosage} • {formatTime(item.scheduledTime)}
-                            </p>
-                          </div>
-                        </div>
-
-                        {item.status === 'pending' && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleLogDose(item.reminderId, item.scheduledTime, 'taken')}
-                              className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-                            >
-                              Taken
-                            </button>
-                            <button
-                              onClick={() => handleLogDose(item.reminderId, item.scheduledTime, 'skipped')}
-                              className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
-                            >
-                              Skip
-                            </button>
-                            <button
-                              onClick={() => handleLogDose(item.reminderId, item.scheduledTime, 'missed')}
-                              className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
-                            >
-                              Missed
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <BellIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">No medications scheduled for today</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* All Reminders */}
-          {activeTab === 'all' && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">All Active Reminders</h2>
-                {conflicts && conflicts.totalConflicts > 0 && (
-                  <div className="flex items-center space-x-2 px-3 py-1 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <ExclamationCircleIcon className="h-4 w-4 text-yellow-600" />
-                    <span className="text-sm text-yellow-800">
-                      {conflicts.totalConflicts} scheduling conflict{conflicts.totalConflicts > 1 ? 's' : ''}
+              return (
+                <div key={period.id}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <period.icon className={`w-5 h-5 ${period.color}`} />
+                    <span className="text-base font-bold text-gray-700 dark:text-gray-300">
+                      {period.label}
                     </span>
                   </div>
-                )}
-              </div>
 
-              {/* Conflicts Display */}
-              {conflicts && conflicts.conflicts.length > 0 && (
-                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <h3 className="font-medium text-yellow-900 mb-3">Scheduling Conflicts</h3>
                   <div className="space-y-2">
-                    {conflicts.conflicts.map((conflict, index) => (
-                      <div key={index} className="flex items-start space-x-3">
-                        <ExclamationCircleIcon className="h-5 w-5 text-yellow-600 mt-0.5" />
-                        <div>
-                          <p className="text-sm text-yellow-800 font-medium">{conflict.message}</p>
-                          <ul className="text-sm text-yellow-700 mt-1 ml-4 list-disc">
-                            {conflict.medications.map((med, medIndex) => (
-                              <li key={medIndex}>{med.medicineName} ({med.dosage})</li>
-                            ))}
-                          </ul>
+                    {items.map((item, index) => (
+                      <motion.div
+                        key={`${item.reminderId}-${index}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className={`bg-white dark:bg-slate-900 rounded-2xl p-5 border shadow-sm ${item.taken
+                          ? 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-none'
+                          : 'border-gray-100 dark:border-slate-800'
+                          }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => !item.taken && markAsTaken(item.reminderId, item.scheduledTime)}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${item.taken
+                              ? 'bg-emerald-500'
+                              : 'bg-gray-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                              }`}
+                          >
+                            {item.taken ? (
+                              <CheckCircleSolid className="w-6 h-6 text-white" />
+                            ) : (
+                              <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded-full" />
+                            )}
+                          </button>
+
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-medium text-sm ${item.taken ? 'text-emerald-700 dark:text-emerald-300 line-through' : 'text-gray-900 dark:text-white'
+                              }`}>
+                              {item.medicineName}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {item.dosage} • {new Date(item.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+
+                          {item.taken && (
+                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                              {t('reminders.taken') || 'Taken'}
+                            </span>
+                          )}
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 </div>
-              )}
+              );
+            })}
 
-              {isLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-2">Loading reminders...</p>
+            {todaysSchedule.length === 0 && (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CalendarDaysIcon className="w-8 h-8 text-gray-400" />
                 </div>
-              ) : reminders.length > 0 ? (
-                <div className="space-y-4">
-                  {reminders.map((reminder) => (
-                    <div key={reminder._id} className="p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900">{reminder.medicineName}</h3>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {reminder.dosage} • {reminder.frequency.replace('_', ' ')} daily
-                          </p>
-                          <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                            <span>Times: {reminder.times.join(', ')}</span>
-                            <span>•</span>
-                            <span>Started: {new Date(reminder.startDate).toLocaleDateString()}</span>
-                            {reminder.adherencePercentage !== undefined && (
-                              <>
-                                <span>•</span>
-                                <span>Adherence: {reminder.adherencePercentage}%</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => handleEditReminder(reminder)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit reminder"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteReminder(reminder._id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete reminder"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <ClockIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">No active reminders found</p>
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="mt-3 text-blue-600 hover:text-blue-800"
-                  >
-                    Create your first reminder
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Calendar */}
-          {activeTab === 'calendar' && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Adherence Calendar</h2>
-              <AdherenceCalendar userId={isAuthenticated ? 'current-user' : null} />
-            </div>
-          )}
-
-          {/* Statistics */}
-          {activeTab === 'stats' && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Adherence Statistics</h2>
-
-              {isLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-2">Loading statistics...</p>
-                </div>
-              ) : stats ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="font-medium text-blue-900">Overall Adherence</h3>
-                    <p className="text-3xl font-bold text-blue-600 mt-2">{stats.adherencePercentage}%</p>
-                    <p className="text-sm text-blue-700">Last {stats.period}</p>
-                  </div>
-
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h3 className="font-medium text-green-900">Doses Taken</h3>
-                    <p className="text-3xl font-bold text-green-600 mt-2">{stats.totalTaken}</p>
-                    <p className="text-sm text-green-700">Out of {stats.totalScheduled} scheduled</p>
-                  </div>
-
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <h3 className="font-medium text-red-900">Doses Missed</h3>
-                    <p className="text-3xl font-bold text-red-600 mt-2">{stats.totalMissed}</p>
-                    <p className="text-sm text-red-700">Missed doses</p>
-                  </div>
-
-                  <div className="bg-yellow-50 p-4 rounded-lg">
-                    <h3 className="font-medium text-yellow-900">Doses Skipped</h3>
-                    <p className="text-3xl font-bold text-yellow-600 mt-2">{stats.totalSkipped}</p>
-                    <p className="text-sm text-yellow-700">Intentionally skipped</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <ChartBarIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">No statistics available yet</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Start taking your medications to see adherence statistics
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Settings */}
-          {activeTab === 'settings' && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Notification Settings</h2>
-
-              <div className="space-y-6">
-                <NotificationSettings onPermissionChange={handleNotificationPermissionChange} />
-                
-                {/* Notification Testing */}
-                <NotificationTest />
-
-                {/* Additional Settings */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-gray-900 mb-3">Reminder Preferences</h3>
-                  <div className="space-y-3">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        defaultChecked
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">
-                        Show missed dose alerts
-                      </span>
-                    </label>
-
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        defaultChecked
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">
-                        Daily adherence summary
-                      </span>
-                    </label>
-
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        defaultChecked
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">
-                        Weekly adherence report
-                      </span>
-                    </label>
-                  </div>
-                </div>
+                <p className="text-gray-500 dark:text-gray-400 mb-2">
+                  {t('reminders.noRemindersToday') || 'No reminders for today'}
+                </p>
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="text-blue-500 font-medium text-sm"
+                >
+                  {t('reminders.addFirst') || 'Add your first reminder'}
+                </button>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          /* All Reminders */
+          <div className="space-y-2">
+            {reminders.map((reminder, index) => (
+              <motion.button
+                key={reminder._id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                onClick={() => {
+                  setEditingReminder(reminder);
+                  setShowForm(true);
+                }}
+                className="w-full bg-white dark:bg-slate-900 rounded-2xl p-5 border border-gray-100 dark:border-slate-800 text-left shadow-sm active:scale-[0.98] transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${reminder.isActive
+                    ? 'bg-blue-100 dark:bg-blue-950/50'
+                    : 'bg-gray-100 dark:bg-slate-800'
+                    }`}>
+                    <BellIcon className={`w-5 h-5 ${reminder.isActive ? 'text-blue-500' : 'text-gray-400'
+                      }`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                      {reminder.medicineName}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {reminder.dosage} • {reminder.times?.join(', ')}
+                    </p>
+                  </div>
+                  <ChevronRightIcon className="w-5 h-5 text-gray-300 dark:text-gray-600" />
+                </div>
+              </motion.button>
+            ))}
+
+            {reminders.length === 0 && (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <BellIcon className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-gray-500 dark:text-gray-400">
+                  {t('reminders.noReminders') || 'No reminders yet'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Add Button */}
+      <motion.button
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setShowForm(true)}
+        className="fixed right-4 z-30 w-14 h-14 bg-blue-500 rounded-2xl shadow-lg shadow-blue-500/30 flex items-center justify-center"
+        style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom))' }}
+      >
+        <PlusIcon className="w-7 h-7 text-white" />
+      </motion.button>
+
+      {/* Form Modal */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end"
+            onClick={() => setShowForm(false)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full bg-white dark:bg-slate-900 rounded-t-3xl max-h-[90vh] overflow-y-auto"
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 20px)' }}
+            >
+              <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-6 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {editingReminder ? t('reminders.editReminder') : t('reminders.addReminder')}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditingReminder(null);
+                  }}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl"
+                >
+                  <XMarkIcon className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+              <div className="p-4">
+                <ReminderForm
+                  editingReminder={editingReminder}
+                  onSave={handleSaveReminder}
+                  onDelete={handleDeleteReminder}
+                  onCancel={() => {
+                    setShowForm(false);
+                    setEditingReminder(null);
+                  }}
+                  isLoading={isLoading}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title={t('reminders.deleteTitle') || "Delete Reminder"}
+        message={t('reminders.confirmDelete') || "Are you sure you want to delete this reminder? This action cannot be undone."}
+        confirmText={t('common.delete') || "Delete"}
+        isDangerous={true}
+      />
     </div>
   );
 };

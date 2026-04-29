@@ -72,6 +72,13 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+scratch/
+server/scratch/
+server/temp/
+.ai-context/
+*.html
+*.mjs
+node_modules/
 
 # Build artifacts
 build/

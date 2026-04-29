@@ -11,6 +11,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 console.log('🔍 Starting Mediot Server...');
 console.log('📊 Environment:', process.env.NODE_ENV || 'development');
 console.log('🔑 Gemini API Key present:', !!process.env.GEMINI_API_KEY);
+console.log('🚀 SambaNova (DeepSeek) Key present:', !!process.env.SAMBANOVA_API_KEY);
 console.log('🗄️ MongoDB URI present:', !!process.env.MONGODB_URI);
 console.log('🚪 Port:', process.env.PORT || 3001);
 
@@ -53,20 +54,25 @@ try {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
-// Rate limiting
+// Rate limiting - more generous for development
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // increased limit
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use(limiter);
 
-// CORS configuration
+// CORS configuration - allow multiple localhost ports for development
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? [
@@ -76,8 +82,10 @@ app.use(cors({
         'https://medicine-recognition-system-tankuday21.vercel.app',
         process.env.CORS_ORIGIN
       ].filter(Boolean)
-    : ['http://localhost:3000'],
-  credentials: true
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003', 'http://127.0.0.1:3000', 'http://192.168.1.4:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Body parsing middleware
@@ -280,11 +288,11 @@ app.use('*', (req, res) => {
   });
 });
 
-// Initialize notification scheduler (temporarily disabled for testing)
+// Initialize notification scheduler
 try {
   const notificationScheduler = require('./services/notificationScheduler');
-  // notificationScheduler.start(); // Disabled for testing
-  console.log('📅 Notification scheduler loaded (not started)');
+  notificationScheduler.start();
+  console.log('📅 Notification scheduler started');
 } catch (error) {
   console.error('❌ Failed to load notification scheduler:', error.message);
 }

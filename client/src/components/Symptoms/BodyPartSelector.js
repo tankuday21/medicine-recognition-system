@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import {
-  PlusIcon
+  PlusIcon,
+  CheckCircleIcon,
+  ShieldCheckIcon,
+  ArrowRightIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const BodyPartSelector = ({ onSymptomSelect }) => {
   const [bodyParts, setBodyParts] = useState([]);
@@ -74,110 +79,136 @@ const BodyPartSelector = ({ onSymptomSelect }) => {
     return icons[bodyPartId] || '📍';
   };
 
-  const getCategoryColor = (category) => {
-    const colors = {
-      general: 'bg-blue-100 text-blue-800',
-      neurological: 'bg-purple-100 text-purple-800',
-      respiratory: 'bg-green-100 text-green-800',
-      cardiovascular: 'bg-red-100 text-red-800',
-      gastrointestinal: 'bg-yellow-100 text-yellow-800',
-      musculoskeletal: 'bg-indigo-100 text-indigo-800',
-      dermatological: 'bg-pink-100 text-pink-800',
-      ent: 'bg-orange-100 text-orange-800',
-      ophthalmological: 'bg-teal-100 text-teal-800'
+  const getCategoryStyles = (category) => {
+    const styles = {
+      general: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+      neurological: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+      respiratory: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+      cardiovascular: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+      gastrointestinal: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+      musculoskeletal: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+      dermatological: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
+      ent: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+      ophthalmological: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
     };
-    return colors[category] || 'bg-gray-100 text-gray-800';
+    return styles[category] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
   };
 
   return (
-    <div>
+    <div className="space-y-8">
       {/* Body Parts Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-3">
         {bodyParts.map((bodyPart) => (
-          <button
+          <motion.button
             key={bodyPart.id}
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handleBodyPartSelect(bodyPart)}
             className={`
-              p-4 border-2 rounded-lg text-center transition-all hover:shadow-md
+              p-4 rounded-2xl text-center transition-all relative overflow-hidden group border-2
               ${selectedBodyPart?.id === bodyPart.id
-                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                : 'border-gray-200 hover:border-gray-300'
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20 text-primary-700 dark:text-primary-300 shadow-lg shadow-primary-500/10'
+                : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 hover:border-slate-200'
               }
             `}
           >
-            <div className="text-2xl mb-2">{getBodyPartIcon(bodyPart.id)}</div>
-            <div className="font-medium text-sm">{bodyPart.name}</div>
-            <div className="text-xs text-gray-500 mt-1">
-              {bodyPart.symptoms.length} symptoms
+            <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-300">
+              {getBodyPartIcon(bodyPart.id)}
             </div>
-          </button>
+            <div className="font-black text-[10px] uppercase tracking-widest truncate">
+              {bodyPart.name}
+            </div>
+            <div className="text-[8px] font-bold text-slate-400 mt-1 uppercase">
+              {bodyPart.symptoms.length} items
+            </div>
+            
+            {selectedBodyPart?.id === bodyPart.id && (
+              <motion.div 
+                layoutId="active-indicator"
+                className="absolute top-1.5 right-1.5"
+              >
+                <div className="w-2 h-2 bg-primary-500 rounded-full" />
+              </motion.div>
+            )}
+          </motion.button>
         ))}
       </div>
 
       {/* Selected Body Part Symptoms */}
-      {selectedBodyPart && (
-        <div className="border-t pt-6">
-          <h3 className="font-medium text-gray-900 mb-4">
-            Symptoms for {selectedBodyPart.name}
-          </h3>
-
-          {isLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 mt-2">Loading symptoms...</p>
+      <AnimatePresence mode="wait">
+        {selectedBodyPart ? (
+          <motion.div 
+            key="symptoms-list"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="pt-4 border-t border-slate-100 dark:border-slate-800"
+          >
+            <div className="flex items-center justify-between mb-5 px-1">
+              <h3 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight">
+                {selectedBodyPart.name} Symptoms
+              </h3>
+              <span className="text-[10px] font-bold text-slate-400">{symptoms.length} found</span>
             </div>
-          ) : symptoms.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3">
-              {symptoms.map((symptom) => (
-                <button
-                  key={symptom.id}
-                  onClick={() => handleSymptomSelect(symptom)}
-                  className="p-3 border border-gray-200 rounded-lg text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <div className="flex items-center justify-between">
+
+            {isLoading ? (
+              <div className="text-center py-10">
+                <div className="w-8 h-8 border-3 border-primary-500/20 border-t-primary-500 rounded-full animate-spin mx-auto"></div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">Consulting Database...</p>
+              </div>
+            ) : symptoms.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3">
+                {symptoms.map((symptom, idx) => (
+                  <motion.button
+                    key={symptom.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    onClick={() => handleSymptomSelect(symptom)}
+                    className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl text-left hover:border-primary-500/30 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group flex items-center justify-between shadow-sm"
+                  >
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{symptom.name}</h4>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(symptom.category)}`}>
+                      <h4 className="font-black text-slate-900 dark:text-white text-sm group-hover:text-primary-600 transition-colors">{symptom.name}</h4>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-md ${getCategoryStyles(symptom.category)}`}>
                           {symptom.category}
                         </span>
                         {symptom.criticalThreshold && (
-                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                            ⚠️ Critical
+                          <span className="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-md bg-rose-50 text-rose-600 border border-rose-100">
+                            Priority
                           </span>
                         )}
                       </div>
                     </div>
-                    <PlusIcon className="h-5 w-5 text-gray-400" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-6 text-gray-500">
-              <p>No symptoms available for this body part</p>
-            </div>
-          )}
-        </div>
-      )}
+                    <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center group-hover:bg-primary-500 group-hover:text-white transition-all">
+                      <PlusIcon className="h-4 w-4 stroke-[3]" />
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                <p className="text-xs font-bold text-slate-400 uppercase">No items listed</p>
+              </div>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 text-center"
+          >
+            <InformationCircleIcon className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Select a body area above to begin</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Error Message */}
       {error && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {/* Instructions */}
-      {!selectedBodyPart && (
-        <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-          <h4 className="font-medium text-gray-900 mb-2">How to use:</h4>
-          <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
-            <li>Click on a body part where you're experiencing symptoms</li>
-            <li>Browse the list of symptoms for that area</li>
-            <li>Click the "+" button to add symptoms to your list</li>
-            <li>You can select multiple symptoms from different body parts</li>
-          </ol>
+        <div className="p-4 bg-rose-50 border border-rose-100 text-rose-700 rounded-2xl flex items-center gap-3">
+          <ShieldCheckIcon className="w-5 h-5" />
+          <p className="text-xs font-bold">{error}</p>
         </div>
       )}
     </div>

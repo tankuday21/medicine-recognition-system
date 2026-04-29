@@ -1,473 +1,396 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import {
-  ClockIcon,
-  PlusIcon,
-  XMarkIcon,
-  CalendarIcon,
-  BeakerIcon
+    PlusIcon,
+    XMarkIcon,
+    BeakerIcon
 } from '@heroicons/react/24/outline';
 import MedicineSearch from '../Medicine/MedicineSearch';
+import { useLanguage } from '../../contexts/LanguageContext';
+import CustomDatePicker from '../Common/CustomDatePicker';
+import CustomTimePicker from '../Common/CustomTimePicker';
 
-const ReminderForm = ({ medicine: initialMedicine, editingReminder, onSave, onCancel, isLoading = false }) => {
-  const [formData, setFormData] = useState({
-    medicineName: '',
-    dosage: '',
-    frequency: 'twice',
-    startDate: '',
-    endDate: '',
-    times: [],
-    notes: '',
-    medicineId: null
-  });
-  const [selectedMedicine, setSelectedMedicine] = useState(initialMedicine || null);
-  const [errors, setErrors] = useState({});
+const ReminderForm = ({ medicine: initialMedicine, editingReminder, onSave, onDelete, onCancel, isLoading = false }) => {
+    const { t } = useLanguage();
+    const [formData, setFormData] = useState({
+        medicineName: '',
+        dosage: '',
+        frequency: 'twice',
+        startDate: '',
+        endDate: '',
+        times: [],
+        notes: '',
+        medicineId: null
+    });
+    const [selectedMedicine, setSelectedMedicine] = useState(initialMedicine || null);
+    const [errors, setErrors] = useState({});
 
-  const frequencyOptions = [
-    { value: 'once', label: 'Once daily', times: 1 },
-    { value: 'twice', label: 'Twice daily', times: 2 },
-    { value: 'thrice', label: 'Three times daily', times: 3 },
-    { value: 'four_times', label: 'Four times daily', times: 4 },
-    { value: 'custom', label: 'Custom schedule', times: null }
-  ];
+    const frequencyOptions = [
+        { value: 'once', label: t('reminders.onceDaily'), times: 1 },
+        { value: 'twice', label: t('reminders.twiceDaily'), times: 2 },
+        { value: 'thrice', label: t('reminders.thriceDaily'), times: 3 },
+        { value: 'four_times', label: t('reminders.fourTimesDaily'), times: 4 },
+        { value: 'custom', label: t('reminders.customSchedule'), times: null }
+    ];
 
-  // Initialize form with medicine data
-  useEffect(() => {
-    if (selectedMedicine) {
-      setFormData(prev => ({
-        ...prev,
-        medicineName: selectedMedicine.name,
-        dosage: selectedMedicine.dosage || '',
-        medicineId: selectedMedicine._id || selectedMedicine.id
-      }));
-    }
-  }, [selectedMedicine]);
-
-  // Set default times when frequency changes
-  useEffect(() => {
-    const getDefaultTimes = async (frequency) => {
-      try {
-        const response = await fetch(`/api/reminders/frequency/${frequency}/times`);
-        const data = await response.json();
-        
-        if (data.success) {
-          setFormData(prev => ({
-            ...prev,
-            times: data.data.defaultTimes
-          }));
+    // Initialize form with medicine data
+    useEffect(() => {
+        if (selectedMedicine) {
+            setFormData(prev => ({
+                ...prev,
+                medicineName: selectedMedicine.name,
+                dosage: selectedMedicine.dosage || '',
+                medicineId: selectedMedicine._id || selectedMedicine.id
+            }));
         }
-      } catch (error) {
-        console.error('Failed to get default times:', error);
-        // Fallback to hardcoded defaults
-        const defaultTimes = {
-          once: ['08:00'],
-          twice: ['08:00', '20:00'],
-          thrice: ['08:00', '14:00', '20:00'],
-          four_times: ['08:00', '12:00', '16:00', '20:00']
+    }, [selectedMedicine]);
+
+    // Set default times when frequency changes
+    useEffect(() => {
+        const getDefaultTimes = async (frequency) => {
+            try {
+                const response = await fetch(`/api/reminders/frequency/${frequency}/times`);
+                const data = await response.json();
+
+                if (data.success) {
+                    setFormData(prev => ({
+                        ...prev,
+                        times: data.data.defaultTimes
+                    }));
+                }
+            } catch (error) {
+                console.error('Failed to get default times:', error);
+                // Fallback to hardcoded defaults
+                const defaultTimes = {
+                    once: ['08:00'],
+                    twice: ['08:00', '20:00'],
+                    thrice: ['08:00', '14:00', '20:00'],
+                    four_times: ['08:00', '12:00', '16:00', '20:00']
+                };
+
+                setFormData(prev => ({
+                    ...prev,
+                    times: defaultTimes[frequency] || []
+                }));
+            }
         };
-        
+
+        if (formData.frequency !== 'custom') {
+            getDefaultTimes(formData.frequency);
+        } else if (formData.frequency === 'custom' && formData.times.length === 0) {
+            setFormData(prev => ({ ...prev, times: ['08:00'] }));
+        }
+    }, [formData.frequency]);
+
+    // Initialize form when editing
+    useEffect(() => {
+        if (editingReminder) {
+            setFormData({
+                medicineName: editingReminder.medicineName,
+                dosage: editingReminder.dosage,
+                frequency: editingReminder.frequency,
+                startDate: editingReminder.startDate ? new Date(editingReminder.startDate).toISOString().split('T')[0] : '',
+                endDate: editingReminder.endDate ? new Date(editingReminder.endDate).toISOString().split('T')[0] : '',
+                times: editingReminder.times || [],
+                notes: editingReminder.notes || '',
+                medicineId: editingReminder.medicineId
+            });
+            if (editingReminder.medicineId) {
+                setSelectedMedicine({
+                    _id: editingReminder.medicineId,
+                    name: editingReminder.medicineName,
+                    dosage: editingReminder.dosage
+                });
+            }
+        }
+    }, [editingReminder]);
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
         setFormData(prev => ({
-          ...prev,
-          times: defaultTimes[frequency] || []
+            ...prev,
+            [name]: value
         }));
-      }
+        if (errors[name]) {
+            setErrors(prev => ({ ...prev, [name]: null }));
+        }
     };
 
-    if (formData.frequency !== 'custom') {
-      getDefaultTimes(formData.frequency);
-    }
-  }, [formData.frequency]);
-
-  // Set default start date to today or initialize with editing data
-  useEffect(() => {
-    if (editingReminder) {
-      setFormData({
-        medicineName: editingReminder.medicineName,
-        dosage: editingReminder.dosage,
-        frequency: editingReminder.frequency,
-        startDate: new Date(editingReminder.startDate).toISOString().split('T')[0],
-        endDate: editingReminder.endDate ? new Date(editingReminder.endDate).toISOString().split('T')[0] : '',
-        times: [...editingReminder.times],
-        notes: editingReminder.notes || '',
-        medicineId: editingReminder.medicineId?._id || null
-      });
-      if (editingReminder.medicineId) {
-        setSelectedMedicine(editingReminder.medicineId);
-      }
-    } else {
-      const today = new Date().toISOString().split('T')[0];
-      setFormData(prev => ({
-        ...prev,
-        startDate: today
-      }));
-    }
-  }, [editingReminder]);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-  };
-
-  const handleMedicineSelect = (medicine) => {
-    setSelectedMedicine(medicine);
-  };
-
-  const handleTimeChange = (index, value) => {
-    const newTimes = [...formData.times];
-    newTimes[index] = value;
-    setFormData(prev => ({
-      ...prev,
-      times: newTimes
-    }));
-  };
-
-  const addTime = () => {
-    setFormData(prev => ({
-      ...prev,
-      times: [...prev.times, '08:00']
-    }));
-  };
-
-  const removeTime = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      times: prev.times.filter((_, i) => i !== index)
-    }));
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.medicineName.trim()) {
-      newErrors.medicineName = 'Medicine name is required';
-    }
-
-    if (!formData.dosage.trim()) {
-      newErrors.dosage = 'Dosage is required';
-    }
-
-    if (!formData.startDate) {
-      newErrors.startDate = 'Start date is required';
-    }
-
-    if (formData.times.length === 0) {
-      newErrors.times = 'At least one time is required';
-    }
-
-    // Validate times format
-    const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    const invalidTimes = formData.times.filter(time => !timeRegex.test(time));
-    if (invalidTimes.length > 0) {
-      newErrors.times = 'All times must be in HH:MM format';
-    }
-
-    // Check for duplicate times
-    const uniqueTimes = new Set(formData.times);
-    if (uniqueTimes.size !== formData.times.length) {
-      newErrors.times = 'Duplicate times are not allowed';
-    }
-
-    // Validate end date is after start date
-    if (formData.endDate && formData.startDate && formData.endDate <= formData.startDate) {
-      newErrors.endDate = 'End date must be after start date';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
-    const reminderData = {
-      ...formData,
-      times: formData.times.sort() // Sort times
+    const handleCustomChange = (name, value) => {
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+        if (errors[name]) {
+            setErrors(prev => ({ ...prev, [name]: null }));
+        }
     };
 
-    onSave(reminderData);
-  };
+    const handleTimeChange = (index, value) => {
+        const newTimes = [...formData.times];
+        newTimes[index] = value;
+        setFormData(prev => ({
+            ...prev,
+            times: newTimes
+        }));
+    };
 
-  return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-      <div className="flex items-start justify-between mb-4 sm:mb-6">
-        <div className="flex items-start space-x-2 sm:space-x-3 min-w-0 flex-1">
-          <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
-            <ClockIcon className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">
-              {editingReminder ? 'Edit Reminder' : (initialMedicine ? 'Create Reminder' : 'New Medication Reminder')}
-            </h2>
-            <p className="text-sm text-gray-600">Set up a schedule for your medication</p>
-          </div>
-        </div>
-        
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            className="p-2 text-gray-400 hover:text-gray-600 transition-colors touch-target flex-shrink-0"
-            aria-label="Cancel"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        )}
-      </div>
+    const addTime = () => {
+        setFormData(prev => ({
+            ...prev,
+            times: [...prev.times, '12:00']
+        }));
+    };
 
-      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-        {/* Medicine Selection */}
-        {!initialMedicine && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Medicine
-            </label>
-            <MedicineSearch
-              onSelectMedicine={handleMedicineSelect}
-              placeholder="Search for a medicine..."
-            />
-            {selectedMedicine && (
-              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <BeakerIcon className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="font-medium text-gray-900">{selectedMedicine.name}</p>
-                    {selectedMedicine.genericName && (
-                      <p className="text-sm text-gray-600">{selectedMedicine.genericName}</p>
+    const removeTime = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            times: prev.times.filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleMedicineSelect = (medicine) => {
+        setSelectedMedicine(medicine);
+        setFormData(prev => ({
+            ...prev,
+            medicineName: medicine.name,
+            dosage: medicine.dosage || prev.dosage
+        }));
+        setErrors(prev => ({ ...prev, medicineName: null }));
+    };
+
+    const handleMedicineQueryChange = (query) => {
+        setFormData(prev => ({
+            ...prev,
+            medicineName: query
+        }));
+        if (query) {
+            setErrors(prev => ({ ...prev, medicineName: null }));
+        }
+    };
+
+    const validateForm = () => {
+        const newErrors = {};
+        if (!formData.medicineName) newErrors.medicineName = t('reminders.medicineNameRequired');
+        if (!formData.startDate) newErrors.startDate = t('reminders.startDateRequired');
+        if (formData.frequency === 'custom' && formData.times.length === 0) {
+            newErrors.times = t('reminders.atLeastOneTime');
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!validateForm()) return;
+
+        const reminderData = {
+            ...formData,
+            medicineId: selectedMedicine?._id || selectedMedicine?.id
+        };
+
+        onSave(reminderData);
+    };
+
+    return (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl">
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Medicine Search */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('reminders.medicineName')} *
+                    </label>
+                    <MedicineSearch
+                        onSelectMedicine={handleMedicineSelect}
+                        onQueryChange={handleMedicineQueryChange}
+                        initialValue={formData.medicineName}
+                        placeholder={t('reminders.searchMedicine')}
+                    />
+                    {errors.medicineName && (
+                        <p className="mt-1 text-sm text-red-600">{errors.medicineName}</p>
                     )}
-                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* Medicine Name and Dosage */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Medicine Name *
-            </label>
-            <input
-              type="text"
-              name="medicineName"
-              value={formData.medicineName}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 text-base min-h-[44px] ${
-                errors.medicineName ? 'border-red-300' : 'border-gray-300'
-              }`}
-              placeholder="Enter medicine name"
-            />
-            {errors.medicineName && (
-              <p className="mt-1 text-sm text-red-600">{errors.medicineName}</p>
-            )}
-          </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Dosage */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('reminders.dosage')}
+                        </label>
+                        <div className="relative group">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <BeakerIcon className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                name="dosage"
+                                value={formData.dosage}
+                                onChange={handleInputChange}
+                                className="w-full !pl-14 pr-4 py-3.5 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-white transition-all"
+                                placeholder={t('reminders.dosagePlaceholder') || "e.g., 500mg, 1 tablet"}
+                            />
+                        </div>
+                    </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Dosage *
-            </label>
-            <input
-              type="text"
-              name="dosage"
-              value={formData.dosage}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 text-base min-h-[44px] ${
-                errors.dosage ? 'border-red-300' : 'border-gray-300'
-              }`}
-              placeholder="e.g., 500mg, 1 tablet"
-            />
-            {errors.dosage && (
-              <p className="mt-1 text-sm text-red-600">{errors.dosage}</p>
-            )}
-          </div>
-        </div>
+                    {/* Frequency */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('reminders.frequency')}
+                        </label>
+                        <select
+                            name="frequency"
+                            value={formData.frequency}
+                            onChange={handleInputChange}
+                            className="w-full px-3 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-white appearance-none"
+                        >
+                            {frequencyOptions.map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-        {/* Frequency */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Frequency *
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-            {frequencyOptions.map((option) => (
-              <label
-                key={option.value}
-                className={`relative flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 touch-target ${
-                  formData.frequency === option.value
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="frequency"
-                  value={option.value}
-                  checked={formData.frequency === option.value}
-                  onChange={handleInputChange}
-                  className="sr-only"
-                />
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900">{option.label}</div>
-                  {option.times && (
-                    <div className="text-gray-500">{option.times} times</div>
-                  )}
+                    {/* Time Selection Display */}
+                    <div className="md:col-span-2">
+                        {formData.frequency !== 'custom' ? (
+                            <div className="bg-blue-50 dark:bg-slate-800/50 rounded-xl p-4 border border-blue-100 dark:border-slate-700">
+                                <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
+                                    {t('reminders.scheduledTimes')}
+                                </label>
+                                <div className="flex flex-wrap gap-3">
+                                    {formData.times.map((time, index) => (
+                                        <div key={index} className="flex-1 min-w-[120px]">
+                                            <CustomTimePicker
+                                                value={time}
+                                                onChange={(val) => handleTimeChange(index, val)}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-gray-50 dark:bg-slate-800/30 rounded-xl p-4 border border-gray-100 dark:border-slate-700">
+                                <div className="flex items-center justify-between mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {t('reminders.customTimes')}
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={addTime}
+                                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                                    >
+                                        <PlusIcon className="w-4 h-4 mr-2" />
+                                        {t('common.add') || 'Add Time'}
+                                    </button>
+                                </div>
+                                <div className="space-y-3">
+                                    {formData.times.map((time, index) => (
+                                        <div key={index} className="flex gap-3">
+                                            <div className="flex-1">
+                                                <CustomTimePicker
+                                                    value={time}
+                                                    onChange={(val) => handleTimeChange(index, val)}
+                                                    required
+                                                />
+                                            </div>
+                                            {formData.times.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeTime(index)}
+                                                    className="p-3.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors border border-transparent hover:border-red-100"
+                                                >
+                                                    <XMarkIcon className="w-5 h-5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {errors.times && (
+                            <p className="mt-1 text-sm text-red-600">{errors.times}</p>
+                        )}
+                    </div>
+
+                    {/* Start and End Dates */}
+                    <CustomDatePicker
+                        label={t('reminders.startDate')}
+                        value={formData.startDate}
+                        onChange={(val) => handleCustomChange('startDate', val)}
+                        required
+                        error={errors.startDate}
+                    />
+
+                    <CustomDatePicker
+                        label={t('reminders.endDate')}
+                        value={formData.endDate}
+                        onChange={(val) => handleCustomChange('endDate', val)}
+                        error={errors.endDate}
+                        minDate={formData.startDate}
+                    />
                 </div>
-              </label>
-            ))}
-          </div>
-        </div>
 
-        {/* Times */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Times *
-            </label>
-            {formData.frequency === 'custom' && (
-              <button
-                type="button"
-                onClick={addTime}
-                className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800"
-              >
-                <PlusIcon className="h-4 w-4" />
-                <span>Add Time</span>
-              </button>
-            )}
-          </div>
-          
-          <div className="space-y-2 sm:space-y-3">
-            {formData.times.map((time, index) => (
-              <div key={index} className="flex items-center space-x-2 sm:space-x-3">
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => handleTimeChange(index, e.target.value)}
-                  className="px-3 py-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-base min-h-[44px] flex-1"
-                />
-                {formData.frequency === 'custom' && formData.times.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeTime(index)}
-                    className="p-2 text-red-500 hover:text-red-700 touch-target flex-shrink-0"
-                    aria-label="Remove time"
-                  >
-                    <XMarkIcon className="h-5 w-5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          
-          {errors.times && (
-            <p className="mt-1 text-sm text-red-600">{errors.times}</p>
-          )}
-        </div>
+                {/* Notes */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('reminders.notes')}
+                    </label>
+                    <textarea
+                        name="notes"
+                        value={formData.notes}
+                        onChange={handleInputChange}
+                        rows="3"
+                        className="w-full px-3 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                        placeholder={t('reminders.notesPlaceholder')}
+                    />
+                </div>
 
-        {/* Start and End Dates */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Start Date *
-            </label>
-            <div className="relative">
-              <input
-                type="date"
-                name="startDate"
-                value={formData.startDate}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 text-base min-h-[44px] ${
-                  errors.startDate ? 'border-red-300' : 'border-gray-300'
-                }`}
-              />
-              <CalendarIcon className="absolute right-3 top-3.5 h-5 w-5 text-gray-400 pointer-events-none" />
-            </div>
-            {errors.startDate && (
-              <p className="mt-1 text-sm text-red-600">{errors.startDate}</p>
-            )}
-          </div>
+                {/* Submit Buttons */}
+                <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 pt-6 border-t border-gray-100 dark:border-slate-800">
+                    {onDelete && editingReminder && (
+                        <button
+                            type="button"
+                            onClick={() => onDelete(editingReminder._id)}
+                            disabled={isLoading}
+                            className="flex-1 py-3 px-4 border border-red-200 dark:border-red-900/30 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors text-base font-medium touch-target"
+                        >
+                            {t('common.delete') || 'Delete'}
+                        </button>
+                    )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              End Date (Optional)
-            </label>
-            <div className="relative">
-              <input
-                type="date"
-                name="endDate"
-                value={formData.endDate}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 text-base min-h-[44px] ${
-                  errors.endDate ? 'border-red-300' : 'border-gray-300'
-                }`}
-              />
-              <CalendarIcon className="absolute right-3 top-3.5 h-5 w-5 text-gray-400 pointer-events-none" />
-            </div>
-            {errors.endDate && (
-              <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>
-            )}
-          </div>
-        </div>
+                    {onCancel && (
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            disabled={isLoading}
+                            className="flex-1 py-3 px-4 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors text-base font-medium touch-target"
+                        >
+                            {t('common.cancel')}
+                        </button>
+                    )}
 
-        {/* Notes */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Notes (Optional)
-          </label>
-          <textarea
-            name="notes"
-            value={formData.notes}
-            onChange={handleInputChange}
-            rows="3"
-            className="w-full px-3 py-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-base"
-            placeholder="Add any additional notes about this medication..."
-          />
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors text-base font-medium touch-target shadow-lg shadow-blue-600/20"
+                    >
+                        {isLoading ? (editingReminder ? t('reminders.updating') : t('reminders.creating')) : (editingReminder ? t('reminders.updateReminder') : t('reminders.createReminder'))}
+                    </button>
+                </div>
+            </form>
         </div>
-
-        {/* Submit Buttons */}
-        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 pt-4 border-t">
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={isLoading}
-              className="flex-1 py-3 px-4 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors text-base font-medium min-h-[44px] touch-target"
-            >
-              Cancel
-            </button>
-          )}
-          
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors text-base font-medium min-h-[44px] touch-target"
-          >
-            {isLoading ? (editingReminder ? 'Updating...' : 'Creating...') : (editingReminder ? 'Update Reminder' : 'Create Reminder')}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
+    );
 };
 
 ReminderForm.propTypes = {
-  medicine: PropTypes.object,
-  editingReminder: PropTypes.object,
-  onSave: PropTypes.func.isRequired,
-  onCancel: PropTypes.func,
-  isLoading: PropTypes.bool
+    medicine: PropTypes.object,
+    editingReminder: PropTypes.object,
+    onSave: PropTypes.func.isRequired,
+    onDelete: PropTypes.func,
+    onCancel: PropTypes.func,
+    isLoading: PropTypes.bool
 };
 
 export default ReminderForm;

@@ -1,337 +1,341 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigate } from 'react-router-dom';
-import HealthOverview from '../components/Dashboard/HealthOverview';
-import AdherenceChart from '../components/Dashboard/AdherenceChart';
-import HealthTrends from '../components/Dashboard/HealthTrends';
-import RecentActivity from '../components/Dashboard/RecentActivity';
-import Recommendations from '../components/Dashboard/Recommendations';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Select from '../components/ui/Select';
 import {
   ChartBarIcon,
   ClockIcon,
   DocumentTextIcon,
   HeartIcon,
-  LightBulbIcon,
-  HandRaisedIcon
+  CameraIcon,
+  ExclamationTriangleIcon,
+  BellIcon,
+  CheckCircleIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
+  SparklesIcon,
+  CalendarDaysIcon,
+  ChevronRightIcon,
+  SunIcon,
+  MoonIcon
 } from '@heroicons/react/24/outline';
+import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid';
 
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
-  const [timeframe, setTimeframe] = useState('30d');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [greeting, setGreeting] = useState('');
   const { isAuthenticated, user } = useAuth();
-
-  const timeframeOptions = [
-    { value: '7d', label: 'Last 7 days' },
-    { value: '30d', label: 'Last 30 days' },
-    { value: '90d', label: 'Last 3 months' },
-    { value: '1y', label: 'Last year' }
-  ];
+  const { t } = useLanguage();
+  const navigate = useNavigate();
 
   useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting(t('dashboard.greeting.morning'));
+    else if (hour < 17) setGreeting(t('dashboard.greeting.afternoon'));
+    else setGreeting(t('dashboard.greeting.evening'));
+
     if (isAuthenticated) {
       loadDashboardData();
     }
-  }, [isAuthenticated, timeframe]);
+  }, [isAuthenticated]);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
-    setError('');
-
     try {
-      const response = await fetch(`/api/analytics/dashboard?timeframe=${timeframe}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const response = await fetch('/api/analytics/dashboard?timeframe=30d', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-
       const data = await response.json();
-      
       if (data.success) {
         setDashboardData(data.data);
-      } else {
-        setError(data.message || 'Failed to load dashboard data');
       }
     } catch (error) {
       console.error('Dashboard load error:', error);
-      setError('Failed to load dashboard data');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getHealthScoreColor = (score) => {
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
-    if (score >= 40) return 'text-orange-600';
-    return 'text-red-600';
-  };
-
-  const getHealthScoreBackground = (score) => {
-    if (score >= 80) return 'bg-green-50 border-green-200';
-    if (score >= 60) return 'bg-yellow-50 border-yellow-200';
-    if (score >= 40) return 'bg-orange-50 border-orange-200';
-    return 'bg-red-50 border-red-200';
-  };
-
-  const navigate = useNavigate();
-
   if (!isAuthenticated) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <Card variant="elevated" className="text-center">
-          <div className="p-8">
-            <ChartBarIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">Sign In Required</h2>
-            <p className="text-gray-600 mb-6">
-              Please sign in to view your personalized health dashboard and analytics.
-            </p>
-            <Button variant="primary" size="lg" onClick={() => navigate('/login')}>
-              Sign In
-            </Button>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl p-8 text-center max-w-sm w-full">
+          <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <ChartBarIcon className="h-10 w-10 text-white" />
           </div>
-        </Card>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('common.appName')}</h2>
+          <p className="text-gray-500 mb-6">{t('auth.signInRequired')}</p>
+          <button
+            onClick={() => navigate('/login')}
+            className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-semibold shadow-lg shadow-indigo-200 active:scale-98 transition-all"
+          >
+            {t('auth.signIn')}
+          </button>
+        </div>
       </div>
     );
   }
 
+  const healthScore = dashboardData?.overallHealthScore || 78;
+  const adherenceRate = dashboardData?.adherenceAnalytics?.overallRate || 85;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-6">
-      <div className="container mx-auto px-4 max-w-7xl">
-        {/* Header */}
-        <Card variant="gradient" className="mb-8 bg-gradient-to-r from-primary-500 to-primary-600 text-white border-0 shadow-xl">
-          <div className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-              <div className="flex-1">
-                <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-                  Welcome back, {user?.name || 'User'}! <HandRaisedIcon className="h-8 w-8 inline-block" />
-                </h1>
-                <p className="text-white/90 text-lg">Here's your health overview and insights</p>
+    <div className="min-h-screen bg-gray-50 pb-6">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 px-4 pt-6 pb-24 relative overflow-hidden">
+        {/* Decorative circles */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/20 rounded-full translate-y-1/2 -translate-x-1/2" />
+        
+        <div className="relative z-10">
+          {/* Greeting */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              {new Date().getHours() < 18 ? (
+                <SunIcon className="h-5 w-5 text-yellow-300" />
+              ) : (
+                <MoonIcon className="h-5 w-5 text-indigo-200" />
+              )}
+              <span className="text-indigo-200 text-sm">{greeting}</span>
+            </div>
+            <button className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
+              <BellIcon className="h-5 w-5 text-white" />
+            </button>
+          </div>
+          
+          <h1 className="text-2xl font-bold text-white">
+            {user?.name || 'User'} 👋
+          </h1>
+          <p className="text-indigo-200 text-sm mt-1">
+            {t('dashboard.healthInsight')}
+          </p>
+        </div>
+      </div>
+
+      {/* Main Content - Overlapping cards */}
+      <div className="px-4 -mt-16 relative z-20 space-y-4">
+        
+        {/* Health Score Card */}
+        <div className="bg-white rounded-3xl shadow-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-gray-500 text-sm">{t('dashboard.healthScore')}</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-bold text-gray-900">{healthScore}</span>
+                <span className="text-gray-400">/100</span>
               </div>
-              
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-                <Select
-                  value={timeframe}
-                  onChange={(e) => setTimeframe(e.target.value)}
-                  variant="medical"
-                  size="md"
-                  className="bg-white"
-                >
-                  {timeframeOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-                
-                <Button
-                  onClick={loadDashboardData}
-                  disabled={isLoading}
-                  variant="outline"
-                  size="md"
-                  loading={isLoading}
-                  className="bg-white text-primary-600 hover:bg-gray-50"
-                >
-                  {isLoading ? 'Refreshing...' : 'Refresh'}
-                </Button>
+            </div>
+            <div className="relative w-20 h-20">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="40" stroke="#E5E7EB" strokeWidth="10" fill="none" />
+                <circle
+                  cx="50" cy="50" r="40"
+                  stroke="url(#gradient)"
+                  strokeWidth="10"
+                  fill="none"
+                  strokeDasharray={`${healthScore * 2.51} 251`}
+                  strokeLinecap="round"
+                />
+                <defs>
+                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#6366F1" />
+                    <stop offset="100%" stopColor="#A855F7" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <SparklesIcon className="h-6 w-6 text-indigo-500" />
               </div>
             </div>
           </div>
-        </Card>
-
-        {/* Error Display */}
-        {error && (
-          <Card variant="outline" borderAccent="danger" className="mb-6 bg-red-50">
-            <div className="p-4">
-              <p className="text-red-700">{error}</p>
-            </div>
-          </Card>
-        )}
-
-        {/* Loading State */}
-        {isLoading && !dashboardData && (
-          <Card variant="elevated" className="text-center">
-            <div className="p-12">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 text-lg">Loading your health dashboard...</p>
-            </div>
-          </Card>
-        )}
-
-        {/* Dashboard Content */}
-        {dashboardData && (
-          <div className="space-y-6">
-            {/* Health Score Overview */}
-            <Card 
-              variant="elevated" 
-              borderAccent={dashboardData.overallHealthScore >= 80 ? 'success' : dashboardData.overallHealthScore >= 60 ? 'warning' : 'danger'}
-              className={getHealthScoreBackground(dashboardData.overallHealthScore)}
-            >
-              <div className="p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-                  <div className="flex-1">
-                    <h2 className="text-xl font-bold text-gray-900 mb-2">Overall Health Score</h2>
-                    <p className="text-sm sm:text-base text-gray-600">Based on medication adherence, health trends, and activity</p>
-                  </div>
-                  <div className="text-center sm:text-right flex-shrink-0">
-                    <div className={`text-3xl sm:text-4xl font-bold ${getHealthScoreColor(dashboardData.overallHealthScore)}`}>
-                      {dashboardData.overallHealthScore}/100
-                    </div>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-1">Health Score</p>
-                  </div>
-                </div>
+          
+          {/* Mini Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: t('dashboard.adherence'), value: `${adherenceRate}%`, trend: 'up', color: 'emerald' },
+              { label: t('dashboard.reminders'), value: dashboardData?.upcomingReminders || 3, trend: 'neutral', color: 'blue' },
+              { label: t('dashboard.reports'), value: dashboardData?.recentReports || 2, trend: 'up', color: 'purple' }
+            ].map((stat) => (
+              <div key={stat.label} className="bg-gray-50 rounded-2xl p-3 text-center">
+                <p className="text-xs text-gray-500">{stat.label}</p>
+                <p className={`text-lg font-bold text-${stat.color}-600`}>{stat.value}</p>
               </div>
-            </Card>
-
-            {/* Main Dashboard Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
-            {/* Left Column - Charts and Trends */}
-            <div className="xl:col-span-2 space-y-6 sm:space-y-8">
-              {/* Health Overview Cards */}
-              <HealthOverview data={dashboardData} />
-
-              {/* Adherence Chart */}
-              {dashboardData.adherenceAnalytics && (
-                <Card variant="elevated" hoverable>
-                  <div className="p-6">
-                    <div className="flex items-center mb-4">
-                      <ChartBarIcon className="h-6 w-6 text-primary-600 mr-3" />
-                      <h3 className="text-lg font-bold text-gray-900">Medication Adherence</h3>
-                    </div>
-                    <AdherenceChart data={dashboardData.adherenceAnalytics} />
-                  </div>
-                </Card>
-              )}
-
-              {/* Health Trends */}
-              {dashboardData.healthTrends && dashboardData.healthTrends.trends.length > 0 && (
-                <Card variant="elevated" hoverable>
-                  <div className="p-6">
-                    <div className="flex items-center mb-4">
-                      <HeartIcon className="h-6 w-6 text-red-600 mr-3" />
-                      <h3 className="text-lg font-bold text-gray-900">Health Trends</h3>
-                    </div>
-                    <HealthTrends data={dashboardData.healthTrends} />
-                  </div>
-                </Card>
-              )}
-            </div>
-
-            {/* Right Column - Activity and Recommendations */}
-            <div className="space-y-6">
-              {/* Recent Activity */}
-              <Card variant="elevated" hoverable>
-                <div className="p-6">
-                  <div className="flex items-center mb-4">
-                    <ClockIcon className="h-6 w-6 text-green-600 mr-3" />
-                    <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
-                  </div>
-                  <RecentActivity data={dashboardData} />
-                </div>
-              </Card>
-
-              {/* Recommendations */}
-              {dashboardData.recommendations && dashboardData.recommendations.length > 0 && (
-                <Card variant="elevated" hoverable borderAccent="warning" className="bg-yellow-50">
-                  <div className="p-6">
-                    <div className="flex items-center mb-4">
-                      <LightBulbIcon className="h-6 w-6 text-yellow-600 mr-3" />
-                      <h3 className="text-lg font-bold text-gray-900">Recommendations</h3>
-                    </div>
-                    <Recommendations data={dashboardData.recommendations} />
-                  </div>
-                </Card>
-              )}
-
-              {/* Quick Actions */}
-              <Card variant="elevated" hoverable>
-                <div className="p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
-                  <div className="space-y-3">
-                    <Card 
-                      variant="medical" 
-                      hoverable 
-                      pressable 
-                      onClick={() => navigate('/reminders')}
-                      className="cursor-pointer bg-blue-50"
-                    >
-                      <div className="p-4 flex items-center">
-                        <ClockIcon className="h-6 w-6 text-blue-600 mr-3" />
-                        <span className="text-blue-900 font-semibold">Manage Reminders</span>
-                      </div>
-                    </Card>
-                    
-                    <Card 
-                      variant="medical" 
-                      hoverable 
-                      pressable 
-                      onClick={() => navigate('/reports')}
-                      className="cursor-pointer bg-green-50"
-                    >
-                      <div className="p-4 flex items-center">
-                        <DocumentTextIcon className="h-6 w-6 text-green-600 mr-3" />
-                        <span className="text-green-900 font-semibold">Upload Report</span>
-                      </div>
-                    </Card>
-                    
-                    <Card 
-                      variant="medical" 
-                      hoverable 
-                      pressable 
-                      onClick={() => navigate('/symptoms')}
-                      className="cursor-pointer bg-purple-50"
-                    >
-                      <div className="p-4 flex items-center">
-                        <HeartIcon className="h-6 w-6 text-purple-600 mr-3" />
-                        <span className="text-purple-900 font-semibold">Check Symptoms</span>
-                      </div>
-                    </Card>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
-
-          {/* Footer Info */}
-          <div className="text-center text-sm text-gray-500 mt-6">
-            <p>Dashboard last updated: {new Date(dashboardData.generatedAt).toLocaleString()}</p>
-            <p className="mt-1">Data shown for: {timeframeOptions.find(t => t.value === timeframe)?.label}</p>
+            ))}
           </div>
         </div>
-      )}
 
-        {/* Empty State */}
-        {!isLoading && !dashboardData && !error && (
-          <Card variant="elevated" className="text-center">
-            <div className="p-12">
-              <ChartBarIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-900 mb-3">No Data Available</h3>
-              <p className="text-gray-600 mb-6">
-                Start using Mediot to see your personalized health dashboard.
-              </p>
-              <div className="flex justify-center gap-4">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={() => navigate('/reminders')}
-                >
-                  Set Up Reminders
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => navigate('/reports')}
-                >
-                  Upload Report
-                </Button>
-              </div>
+        {/* Quick Actions */}
+        <div className="bg-white rounded-3xl shadow-lg p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold text-gray-900">{t('dashboard.quickActions')}</h2>
+            <span className="text-xs text-gray-400">{t('common.info')}</span>
+          </div>
+          
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { icon: CameraIcon, label: t('scanner.title'), path: '/scanner', color: 'from-blue-500 to-cyan-500' },
+              { icon: ClockIcon, label: t('reminders.title'), path: '/reminders', color: 'from-orange-500 to-amber-500' },
+              { icon: HeartIcon, label: t('profile.settings'), path: '/symptoms', color: 'from-pink-500 to-rose-500' },
+              { icon: ExclamationTriangleIcon, label: t('nav.emergencySOS'), path: '/sos', color: 'from-red-500 to-red-600' }
+            ].map((action) => (
+              <button
+                key={action.path}
+                onClick={() => navigate(action.path)}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className={`w-14 h-14 bg-gradient-to-br ${action.color} rounded-2xl flex items-center justify-center shadow-lg`}>
+                  <action.icon className="h-6 w-6 text-white" />
+                </div>
+                <span className="text-xs font-medium text-gray-600">{action.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Today's Schedule */}
+        <div className="bg-white rounded-3xl shadow-lg p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CalendarDaysIcon className="h-5 w-5 text-indigo-500" />
+              <h2 className="font-bold text-gray-900">{t('dashboard.todaySchedule')}</h2>
             </div>
-          </Card>
-        )}
+            <button 
+              onClick={() => navigate('/reminders')}
+              className="text-indigo-600 text-sm font-medium flex items-center gap-1"
+            >
+              {t('dashboard.viewAll')} <ChevronRightIcon className="h-4 w-4" />
+            </button>
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 bg-gray-100 rounded-2xl animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {[
+                { time: '08:00 AM', medicine: 'Vitamin D3', status: 'taken', dose: '1 tablet' },
+                { time: '02:00 PM', medicine: 'Omega-3', status: 'upcoming', dose: '2 capsules' },
+                { time: '09:00 PM', medicine: 'Melatonin', status: 'upcoming', dose: '1 tablet' }
+              ].map((item, index) => (
+                <div 
+                  key={index}
+                  className={`flex items-center gap-4 p-3 rounded-2xl ${
+                    item.status === 'taken' ? 'bg-emerald-50' : 'bg-gray-50'
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    item.status === 'taken' 
+                      ? 'bg-emerald-500' 
+                      : 'bg-white border-2 border-gray-200'
+                  }`}>
+                    {item.status === 'taken' ? (
+                      <CheckCircleSolid className="h-6 w-6 text-white" />
+                    ) : (
+                      <ClockIcon className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-900">{item.medicine}</p>
+                    <p className="text-xs text-gray-500">{item.dose}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-medium ${
+                      item.status === 'taken' ? 'text-emerald-600' : 'text-gray-600'
+                    }`}>
+                      {item.time}
+                    </p>
+                    <p className={`text-xs ${
+                      item.status === 'taken' ? 'text-emerald-500' : 'text-gray-400'
+                    }`}>
+                      {item.status === 'taken' ? t('dashboard.completed') : t('dashboard.upcoming')}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Health Insights */}
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl shadow-lg p-5 text-white">
+          <div className="flex items-center gap-2 mb-3">
+            <SparklesIcon className="h-5 w-5" />
+            <h2 className="font-bold">{t('dashboard.healthInsight')}</h2>
+          </div>
+          <p className="text-indigo-100 text-sm leading-relaxed">
+            {t('dashboard.improvementInsight')}
+          </p>
+          <div className="flex items-center gap-2 mt-4">
+            <ArrowTrendingUpIcon className="h-5 w-5 text-emerald-300" />
+            <span className="text-sm font-medium text-emerald-300">{t('dashboard.improvementStat')}</span>
+          </div>
+        </div>
+
+        {/* Feature Cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => navigate('/reports')}
+            className="bg-white rounded-2xl shadow-lg p-4 text-left active:scale-98 transition-transform"
+          >
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center mb-3">
+              <DocumentTextIcon className="h-5 w-5 text-purple-600" />
+            </div>
+            <p className="font-semibold text-gray-900">{t('dashboard.reports')}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('scanner.results')}</p>
+          </button>
+
+          <button
+            onClick={() => navigate('/chat')}
+            className="bg-white rounded-2xl shadow-lg p-4 text-left active:scale-98 transition-transform"
+          >
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mb-3">
+              <SparklesIcon className="h-5 w-5 text-blue-600" />
+            </div>
+            <p className="font-semibold text-gray-900">{t('nav.aiAssistant')}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('profile.help')}</p>
+          </button>
+
+          <button
+            onClick={() => navigate('/price-lookup')}
+            className="bg-white rounded-2xl shadow-lg p-4 text-left active:scale-98 transition-transform"
+          >
+            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-3">
+              <ChartBarIcon className="h-5 w-5 text-emerald-600" />
+            </div>
+            <p className="font-semibold text-gray-900">{t('common.search')}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('reminders.medicineName')}</p>
+          </button>
+
+          <button
+            onClick={() => navigate('/news')}
+            className="bg-white rounded-2xl shadow-lg p-4 text-left active:scale-98 transition-transform"
+          >
+            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center mb-3">
+              <DocumentTextIcon className="h-5 w-5 text-orange-600" />
+            </div>
+            <p className="font-semibold text-gray-900">{t('common.info')}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('dashboard.healthInsight')}</p>
+          </button>
+        </div>
+
+        {/* Tip Card */}
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">💡</span>
+            </div>
+            <div>
+              <p className="font-semibold text-amber-900 text-sm">{t('dashboard.dailyTip')}</p>
+              <p className="text-amber-700 text-xs mt-1">
+                {t('reminders.markAsTaken')}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

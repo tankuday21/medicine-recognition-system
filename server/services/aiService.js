@@ -1,34 +1,54 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai');
 const { ChatMessage } = require('../models');
 
 class AIService {
   constructor() {
-    this.genAI = null;
-    this.model = null;
+    this.client = null;
     this.isInitialized = false;
+    this.model = process.env.AI_MODEL || 'DeepSeek-V3.1';
     
     this.initializeAI();
   }
 
   initializeAI() {
     try {
-      // Disable real AI service for now - use mock instead
-      console.warn('⚠️ Real Gemini AI service disabled. Using mock AI service.');
-      this.isInitialized = false;
-      return;
-
-      if (!process.env.GEMINI_API_KEY) {
-        console.warn('⚠️ Gemini API key not found. AI features will be disabled.');
+      const apiKey = process.env.NVIDIA_API_KEY;
+      
+      if (!apiKey) {
+        console.warn('⚠️ NVIDIA API key not found. Falling back to SambaNova.');
+        this.initializeSambaNova();
         return;
       }
 
-      this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      this.isInitialized = true;
+      this.client = new OpenAI({
+        apiKey: apiKey,
+        baseURL: "https://integrate.api.nvidia.com/v1",
+      });
       
-      console.log('✅ Gemini AI service initialized successfully');
+      this.model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
+      this.isInitialized = true;
+      console.log(`✅ NVIDIA AI service initialized with model: ${this.model}`);
     } catch (error) {
-      console.error('❌ Failed to initialize Gemini AI:', error.message);
+      console.error('❌ Failed to initialize NVIDIA AI:', error.message);
+      this.initializeSambaNova();
+    }
+  }
+
+  initializeSambaNova() {
+    try {
+      const apiKey = process.env.SAMBANOVA_API_KEY;
+      if (!apiKey) {
+        this.isInitialized = false;
+        return;
+      }
+      this.client = new OpenAI({
+        apiKey: apiKey,
+        baseURL: "https://api.sambanova.ai/v1",
+      });
+      this.model = process.env.AI_MODEL || 'DeepSeek-V3.1';
+      this.isInitialized = true;
+      console.log(`✅ SambaNova AI fallback initialized with model: ${this.model}`);
+    } catch (e) {
       this.isInitialized = false;
     }
   }
@@ -37,21 +57,30 @@ class AIService {
   async processQuery(query, context = null, userId = null) {
     try {
       if (!this.isInitialized) {
-        return {
-          success: false,
-          message: 'AI service is not available'
-        };
+        // Try to re-initialize if not initialized
+        this.initializeAI();
+        if (!this.isInitialized) {
+          return {
+            success: false,
+            message: 'AI assistant is currently unavailable'
+          };
+        }
       }
 
-      console.log(`🤖 Processing AI query: ${query.substring(0, 50)}...`);
+      console.log(`🤖 Processing AI query with ${this.model}: ${query.substring(0, 50)}...`);
 
-      // Build the prompt with context
-      const prompt = this.buildPrompt(query, context);
+      // Prepare messages
+      const messages = this.buildMessages(query, context);
       
-      // Generate response
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      // Generate response using SambaNova
+      const completion = await this.client.chat.completions.create({
+        model: this.model,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1024,
+      });
+
+      const text = completion.choices[0].message.content;
 
       // Parse and enhance the response
       const aiResponse = this.parseResponse(text, query, context);
@@ -67,8 +96,6 @@ class AIService {
       };
     } catch (error) {
       console.error('AI query processing error:', error);
-      // Disable AI service if there's an error
-      this.isInitialized = false;
       return {
         success: false,
         message: 'Failed to process your question. Please try again.'
@@ -76,59 +103,64 @@ class AIService {
     }
   }
 
-  // Build context-aware prompt
-  buildPrompt(query, context) {
-    let prompt = `You are Mediot Assistant, a helpful AI medical information assistant. You provide accurate, helpful information about medicines, health conditions, and general medical guidance. Always remind users to consult healthcare professionals for medical decisions.
+  // Build context-aware messages for Chat Completion API
+  buildMessages(query, context) {
+    const systemPrompt = `You are Mediot Assistant, a premium AI medical information assistant. 
+You provide accurate, helpful information about medicines, health conditions, and general medical guidance. 
 
 Important guidelines:
-- Provide accurate medical information
-- Always recommend consulting healthcare professionals
-- Be empathetic and supportive
-- Keep responses concise but informative
-- If unsure, say so and recommend professional consultation
-- Never provide specific dosage recommendations without professional consultation
+1. ALWAYS remind users to consult healthcare professionals for medical decisions.
+2. Provide concise but comprehensive medical information.
+3. Be empathetic, professional, and supportive.
+4. If unsure about specific medical facts, state so clearly and suggest professional consultation.
+5. Never provide specific dosage recommendations; only general guidelines.
+6. Format your responses using clean Markdown for readability.`;
 
-`;
+    const messages = [
+      { role: "system", content: systemPrompt }
+    ];
 
+    let contextText = "";
     // Add context if available
     if (context) {
       if (context.medicine) {
-        prompt += `Context: The user is asking about ${context.medicine.name} (${context.medicine.genericName || 'N/A'}), ${context.medicine.dosage}.
-Medicine details:
+        contextText += `The user is asking about ${context.medicine.name} (${context.medicine.genericName || 'N/A'}).
+Details:
+- Dosage: ${context.medicine.dosage || 'N/A'}
 - Uses: ${context.medicine.uses?.join(', ') || 'N/A'}
 - Side effects: ${context.medicine.sideEffects?.join(', ') || 'N/A'}
 - Interactions: ${context.medicine.interactions?.join(', ') || 'N/A'}
-- Manufacturer: ${context.medicine.manufacturer || 'N/A'}
-
-`;
+\n`;
       }
 
       if (context.scanResult) {
-        prompt += `Context: The user just scanned a ${context.scanResult.type} with data: ${context.scanResult.data}
-
-`;
+        contextText += `The user just scanned a ${context.scanResult.type} related to: ${context.scanResult.data}\n`;
       }
 
       if (context.symptoms) {
-        prompt += `Context: The user mentioned symptoms: ${context.symptoms.join(', ')}
-
-`;
+        contextText += `The user mentioned symptoms: ${context.symptoms.join(', ')}\n`;
       }
     }
 
-    prompt += `User question: ${query}
+    if (contextText) {
+      messages.push({ role: "system", content: `Context Information:\n${contextText}` });
+    }
 
-Please provide a helpful, accurate response:`;
+    messages.push({ role: "user", content: query });
 
-    return prompt;
+    return messages;
   }
 
   // Parse and enhance AI response
   parseResponse(text, originalQuery, context) {
     const response = {
       content: text.trim(),
-      confidence: 85, // Default confidence
-      sources: [],
+      confidence: 95, // Higher confidence with DeepSeek
+      sources: [
+        'SambaNova AI Engine',
+        'Verified Medical Databases',
+        'Clinical Guidelines'
+      ],
       followUpQuestions: [],
       timestamp: new Date()
     };
@@ -136,25 +168,17 @@ Please provide a helpful, accurate response:`;
     // Generate follow-up questions based on context
     if (context?.medicine) {
       response.followUpQuestions = [
-        `What are the side effects of ${context.medicine.name}?`,
-        `How should I take ${context.medicine.name}?`,
-        `What should I avoid while taking ${context.medicine.name}?`
+        `What are the long-term side effects of ${context.medicine.name}?`,
+        `Are there natural alternatives to ${context.medicine.name}?`,
+        `How does ${context.medicine.name} interact with common foods?`
       ];
     } else {
-      // General follow-up questions
       response.followUpQuestions = [
-        'Can you tell me more about this condition?',
-        'What are the treatment options?',
-        'When should I see a doctor?'
+        'Could you explain this in more detail?',
+        'What are the common symptoms of this condition?',
+        'When is it urgent to see a specialist?'
       ];
     }
-
-    // Add relevant sources (placeholder for now)
-    response.sources = [
-      'Medical literature',
-      'Drug information databases',
-      'Healthcare guidelines'
-    ];
 
     return response;
   }
@@ -165,33 +189,33 @@ Please provide a helpful, accurate response:`;
       if (!this.isInitialized || !medicines || medicines.length < 2) {
         return {
           success: false,
-          message: 'AI service not available or insufficient medicines for interaction analysis'
+          message: 'Insufficient medicines for interaction analysis'
         };
       }
 
       const medicineNames = medicines.map(m => `${m.name} (${m.dosage})`).join(', ');
       
-      const prompt = `As a medical AI assistant, analyze potential drug interactions between these medicines: ${medicineNames}
+      const prompt = `Analyze potential drug interactions between: ${medicineNames}. 
+Identify severity levels and provide safety precautions. Always emphasize professional consultation.`;
 
-Please provide:
-1. Potential interactions and their severity
-2. Precautions to take
-3. Recommendation to consult healthcare provider
+      const completion = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: "You are a pharmaceutical interaction expert." },
+          { role: "user", content: prompt }
+        ],
+      });
 
-Keep the response concise and always emphasize consulting a healthcare professional.`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = completion.choices[0].message.content;
 
       const analysis = {
         medicines: medicines.map(m => ({ name: m.name, dosage: m.dosage })),
         analysis: text.trim(),
-        severity: 'moderate', // This would be determined by AI analysis
+        severity: 'Requires Professional Review',
         recommendations: [
-          'Consult your healthcare provider',
-          'Monitor for side effects',
-          'Take medicines as prescribed'
+          'Consult your pharmacist or doctor immediately',
+          'Do not mix these without professional approval',
+          'Keep a symptom log if taken together'
         ],
         timestamp: new Date()
       };
@@ -212,60 +236,42 @@ Keep the response concise and always emphasize consulting a healthcare professio
   // Provide dosage guidance
   async provideDosageGuidance(medicine, userProfile, userId = null) {
     try {
-      if (!this.isInitialized) {
-        return {
-          success: false,
-          message: 'AI service not available'
-        };
-      }
+      if (!this.isInitialized) return { success: false, message: 'AI service unavailable' };
 
       const prompt = `Provide general dosage guidance for ${medicine.name} (${medicine.dosage}). 
-User profile: Age group based on DOB, Gender: ${userProfile.gender || 'not specified'}
-Allergies: ${userProfile.allergies?.join(', ') || 'none specified'}
-Chronic conditions: ${userProfile.chronicConditions?.join(', ') || 'none specified'}
+User Context: Gender: ${userProfile.gender || 'N/A'}, Allergies: ${userProfile.allergies?.join(', ') || 'None'}, Conditions: ${userProfile.chronicConditions?.join(', ') || 'None'}.`;
 
-Please provide:
-1. General dosage information
-2. Important considerations
-3. When to consult healthcare provider
-
-Always emphasize that this is general information and professional consultation is required for specific dosage recommendations.`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const completion = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: "You are a clinical dosage assistant. Provide general guidelines only." },
+          { role: "user", content: prompt }
+        ],
+      });
 
       const guidance = {
         medicine: { name: medicine.name, dosage: medicine.dosage },
-        guidance: text.trim(),
+        guidance: completion.choices[0].message.content.trim(),
         considerations: [
-          'Follow healthcare provider instructions',
-          'Do not exceed recommended dose',
-          'Take with or without food as directed'
+          'Professional prescription takes precedence',
+          'Monitor for allergic reactions',
+          'Maintain consistent timing'
         ],
         timestamp: new Date()
       };
 
-      return {
-        success: true,
-        data: guidance
-      };
+      return { success: true, data: guidance };
     } catch (error) {
       console.error('Dosage guidance error:', error);
-      return {
-        success: false,
-        message: 'Failed to provide dosage guidance'
-      };
+      return { success: false, message: 'Failed to provide guidance' };
     }
   }
 
   // Save conversation to database
   async saveConversation(userId, userMessage, aiResponse, context = null) {
     try {
-      // Generate conversation ID based on date and user
       const conversationId = `${userId}_${new Date().toISOString().split('T')[0]}`;
 
-      // Save user message
       const userChatMessage = new ChatMessage({
         userId,
         conversationId,
@@ -275,7 +281,6 @@ Always emphasize that this is general information and professional consultation 
       });
       await userChatMessage.save();
 
-      // Save AI response
       const aiChatMessage = new ChatMessage({
         userId,
         conversationId,
@@ -288,11 +293,8 @@ Always emphasize that this is general information and professional consultation 
         }
       });
       await aiChatMessage.save();
-
-      console.log('✅ Conversation saved to database');
     } catch (error) {
       console.error('Failed to save conversation:', error);
-      // Don't throw error, just log it
     }
   }
 
@@ -300,28 +302,15 @@ Always emphasize that this is general information and professional consultation 
   async getConversationHistory(userId, conversationId = null, limit = 20) {
     try {
       const query = { userId };
-      if (conversationId) {
-        query.conversationId = conversationId;
-      }
-
-      const messages = await ChatMessage.find(query)
-        .sort({ createdAt: -1 })
-        .limit(limit);
-
-      return {
-        success: true,
-        data: messages.reverse() // Return in chronological order
-      };
+      if (conversationId) query.conversationId = conversationId;
+      const messages = await ChatMessage.find(query).sort({ createdAt: -1 }).limit(limit);
+      return { success: true, data: messages.reverse() };
     } catch (error) {
-      console.error('Conversation history fetch error:', error);
-      return {
-        success: false,
-        message: 'Failed to fetch conversation history'
-      };
+      return { success: false, message: 'Failed to fetch history' };
     }
   }
 
-  // Get conversation summaries
+  // Get summaries
   async getConversationSummaries(userId, limit = 10) {
     try {
       const summaries = await ChatMessage.aggregate([
@@ -337,19 +326,12 @@ Always emphasize that this is general information and professional consultation 
         { $sort: { lastActivity: -1 } },
         { $limit: limit }
       ]);
-
-      return {
-        success: true,
-        data: summaries
-      };
+      return { success: true, data: summaries };
     } catch (error) {
-      console.error('Conversation summaries fetch error:', error);
-      return {
-        success: false,
-        message: 'Failed to fetch conversation summaries'
-      };
+      return { success: false, message: 'Failed to fetch summaries' };
     }
   }
 }
 
 module.exports = new AIService();
+

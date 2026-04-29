@@ -8,6 +8,7 @@ import {
   ClipboardDocumentListIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const ChatInterface = ({ initialContext = null, onContextChange }) => {
   const [messages, setMessages] = useState([]);
@@ -17,6 +18,7 @@ const ChatInterface = ({ initialContext = null, onContextChange }) => {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const { isAuthenticated } = useAuth();
+  const { t } = useLanguage();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -33,23 +35,23 @@ const ChatInterface = ({ initialContext = null, onContextChange }) => {
     if (messages.length === 0) {
       const welcomeMessage = {
         id: 'welcome',
-        content: `Hello! I'm Mediot Assistant, your AI health companion. I can help you with:
+        content: `${t('chat.welcomeMessage')}
 
-• Medicine information and interactions
-• General health questions
-• Symptom guidance
-• Dosage information
+• ${t('chat.welcomeFeature1')}
+• ${t('chat.welcomeFeature2')}
+• ${t('chat.welcomeFeature3')}
+• ${t('chat.welcomeFeature4')}
 
-${!isAuthenticated ? '\n💡 Sign in to save your conversation history and get personalized recommendations.' : ''}
+${!isAuthenticated ? '\n💡 ' + t('chat.signInTip') : ''}
 
-How can I help you today?`,
+${t('chat.howCanIHelp')}`,
         sender: 'assistant',
         timestamp: new Date(),
         isWelcome: true
       };
       setMessages([welcomeMessage]);
     }
-  }, [isAuthenticated, messages.length]);
+  }, [isAuthenticated, messages.length, t]);
 
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
@@ -100,12 +102,12 @@ How can I help you today?`,
       }
     } catch (error) {
       console.error('Chat error:', error);
-      setError('Failed to send message. Please try again.');
+      setError(t('chat.failedToSend'));
       
       // Add error message to chat
       const errorMessage = {
         id: (Date.now() + 1).toString(),
-        content: 'Sorry, I encountered an error processing your message. Please try again.',
+        content: t('chat.errorProcessing'),
         sender: 'assistant',
         timestamp: new Date(),
         isError: true
@@ -214,15 +216,15 @@ How can I help you today?`,
             <SparklesIcon className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Mediot Assistant</h2>
-            <p className="text-sm text-gray-500">AI Health Companion</p>
+            <h2 className="text-lg font-semibold text-gray-900">{t('chat.mediotAssistant')}</h2>
+            <p className="text-sm text-gray-500">{t('chat.aiHealthCompanion')}</p>
           </div>
         </div>
         
         {initialContext && (
           <div className="flex items-center space-x-2 text-sm text-gray-600">
             <InformationCircleIcon className="h-4 w-4" />
-            <span>Context: {initialContext.type || 'Medicine'}</span>
+            <span>{t('chat.context')}: {initialContext.type || 'Medicine'}</span>
           </div>
         )}
       </div>
@@ -247,7 +249,7 @@ How can I help you today?`,
                 <div className="flex items-center space-x-2 mb-2">
                   {getMessageIcon(message)}
                   <span className="text-xs font-medium">
-                    {message.isError ? 'Error' : 'Mediot Assistant'}
+                    {message.isError ? t('common.error') : t('chat.mediotAssistant')}
                   </span>
                 </div>
               )}
@@ -258,7 +260,7 @@ How can I help you today?`,
               
               {message.confidence && (
                 <div className="mt-2 text-xs opacity-75">
-                  Confidence: {message.confidence}%
+                  {t('common.confidence')}: {message.confidence}%
                 </div>
               )}
               
@@ -272,7 +274,7 @@ How can I help you today?`,
         {/* Follow-up Questions */}
         {messages.length > 1 && messages[messages.length - 1]?.followUpQuestions && (
           <div className="flex flex-wrap gap-2 mt-4">
-            <p className="text-sm text-gray-600 w-full mb-2">Suggested questions:</p>
+            <p className="text-sm text-gray-600 w-full mb-2">{t('chat.suggestedQuestions')}</p>
             {messages[messages.length - 1].followUpQuestions.slice(0, 3).map((question, index) => (
               <button
                 key={index}
@@ -291,7 +293,7 @@ How can I help you today?`,
             <div className="bg-gray-100 rounded-lg px-4 py-2">
               <div className="flex items-center space-x-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <span className="text-sm text-gray-600">Thinking...</span>
+                <span className="text-sm text-gray-600">{t('chat.thinking')}</span>
               </div>
             </div>
           </div>
@@ -320,7 +322,7 @@ How can I help you today?`,
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me about medicines, health conditions, or symptoms..."
+              placeholder={t('chat.askPlaceholder')}
               className="flex-1 px-5 py-3 bg-transparent text-base placeholder-gray-400"
               style={{ 
                 border: 'none',
@@ -341,7 +343,7 @@ How can I help you today?`,
           </div>
           
           <div className="mt-2 text-xs text-gray-500 text-center">
-            Press Enter to send
+            {t('chat.pressEnterToSend')}
           </div>
         </div>
       </div>

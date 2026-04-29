@@ -38,25 +38,25 @@ const Button = forwardRef(({
     // Base button classes with enhanced animations
     const baseClasses = 'btn-base group';
 
-    // Enhanced variant classes with medical themes
+    // Enhanced variant classes with medical themes and dark mode
     const variantClasses = {
-        primary: 'btn-primary',
-        secondary: 'btn-secondary',
-        ghost: 'btn-ghost',
-        outline: 'bg-transparent text-primary-600 border-2 border-primary-500 hover:bg-primary-50 active:bg-primary-100 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-        danger: 'bg-red-500 text-white shadow-lg shadow-red-500/25 hover:bg-red-600 hover:shadow-xl hover:shadow-red-500/30 active:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2',
-        success: 'bg-green-500 text-white shadow-lg shadow-green-500/25 hover:bg-green-600 hover:shadow-xl hover:shadow-green-500/30 active:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2',
-        medical: 'medical-gradient shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 active:shadow-lg focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-        floating: 'btn-floating'
+        primary: 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/35 active:shadow-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900',
+        secondary: 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 border-2 border-primary-500 dark:border-primary-600 shadow-md hover:bg-primary-50 dark:hover:bg-primary-900/30 hover:shadow-lg active:bg-primary-100 dark:active:bg-primary-900/50 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900',
+        ghost: 'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 active:bg-gray-200 dark:active:bg-slate-600 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900',
+        outline: 'bg-transparent text-primary-600 dark:text-primary-400 border-2 border-primary-500 dark:border-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/30 active:bg-primary-100 dark:active:bg-primary-900/50 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900',
+        danger: 'bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/35 active:shadow-md focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900',
+        success: 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 active:shadow-md focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900',
+        medical: 'bg-gradient-to-r from-primary-600 via-primary-500 to-cyan-500 text-white shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 active:shadow-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900',
+        floating: 'bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-full shadow-2xl shadow-primary-500/40 hover:shadow-2xl hover:shadow-primary-500/50 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900'
     };
 
-    // Enhanced size classes with better touch targets
+    // Enhanced size classes with better touch targets - responsive
     const sizeClasses = {
-        xs: 'text-xs px-2.5 py-1.5 min-h-[36px] gap-1',
-        sm: 'text-sm px-3 py-2 min-h-[40px] gap-1.5',
-        md: 'text-base px-4 py-2.5 min-h-[44px] gap-2',
-        lg: 'text-lg px-6 py-3 min-h-[48px] gap-2.5',
-        xl: 'text-xl px-8 py-4 min-h-[56px] gap-3'
+        xs: 'text-xs px-2.5 py-1.5 min-h-[32px] sm:min-h-[36px] gap-1 rounded-lg',
+        sm: 'text-sm px-3 py-2 min-h-[36px] sm:min-h-[40px] gap-1.5 rounded-lg',
+        md: 'text-sm sm:text-base px-4 py-2.5 min-h-[44px] sm:min-h-[48px] gap-2 rounded-xl',
+        lg: 'text-base sm:text-lg px-5 sm:px-6 py-3 min-h-[48px] sm:min-h-[52px] gap-2.5 rounded-xl',
+        xl: 'text-lg sm:text-xl px-6 sm:px-8 py-3.5 sm:py-4 min-h-[52px] sm:min-h-[56px] gap-3 rounded-2xl'
     };
 
     // Icon size mapping

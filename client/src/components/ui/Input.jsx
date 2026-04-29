@@ -45,11 +45,11 @@ const Input = forwardRef(({
   const [isFocused, setIsFocused] = useState(false);
   const [hasValue, setHasValue] = useState(!!value);
 
-  // Size classes
+  // Size classes - responsive
   const sizeClasses = {
-    sm: 'text-sm px-3 py-2 min-h-[40px]',
-    md: 'text-base px-4 py-3 min-h-[44px]',
-    lg: 'text-lg px-5 py-4 min-h-[48px]'
+    sm: 'text-sm px-3 py-2 min-h-[40px] sm:min-h-[44px] rounded-lg',
+    md: 'text-base px-4 py-3 min-h-[44px] sm:min-h-[48px] rounded-xl',
+    lg: 'text-lg px-5 py-4 min-h-[48px] sm:min-h-[52px] rounded-xl'
   };
 
   // Icon size classes
@@ -67,27 +67,27 @@ const Input = forwardRef(({
     sizeClasses[size]
   );
 
-  // Variant classes
+  // Variant classes with dark mode support
   const variantClasses = {
     default: combineClasses(
-      'bg-white border-gray-300',
-      'focus:border-primary-500 focus:ring-primary-500/20',
-      error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+      'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500',
+      'focus:border-primary-500 dark:focus:border-primary-400 focus:ring-primary-500/20 dark:focus:ring-primary-400/20',
+      error ? 'border-red-500 dark:border-red-400 focus:border-red-500 focus:ring-red-500/20' : ''
     ),
     floating: combineClasses(
-      'bg-white border-gray-300 pt-6 pb-2',
-      'focus:border-primary-500 focus:ring-primary-500/20',
-      error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+      'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white pt-6 pb-2',
+      'focus:border-primary-500 dark:focus:border-primary-400 focus:ring-primary-500/20 dark:focus:ring-primary-400/20',
+      error ? 'border-red-500 dark:border-red-400 focus:border-red-500 focus:ring-red-500/20' : ''
     ),
     filled: combineClasses(
-      'bg-gray-50 border-gray-200',
-      'focus:bg-white focus:border-primary-500 focus:ring-primary-500/20',
-      error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+      'bg-gray-50 dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500',
+      'focus:bg-white dark:focus:bg-slate-800 focus:border-primary-500 dark:focus:border-primary-400 focus:ring-primary-500/20 dark:focus:ring-primary-400/20',
+      error ? 'border-red-500 dark:border-red-400 focus:border-red-500 focus:ring-red-500/20' : ''
     ),
     medical: combineClasses(
-      'bg-gradient-to-r from-primary-50/30 to-white border-primary-200',
-      'focus:border-primary-500 focus:ring-primary-500/20 focus:bg-white',
-      error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+      'bg-gradient-to-r from-primary-50/30 to-white dark:from-primary-900/20 dark:to-slate-800 border-primary-200 dark:border-primary-700 text-gray-900 dark:text-white',
+      'focus:border-primary-500 dark:focus:border-primary-400 focus:ring-primary-500/20 dark:focus:ring-primary-400/20 focus:bg-white dark:focus:bg-slate-800',
+      error ? 'border-red-500 dark:border-red-400 focus:border-red-500 focus:ring-red-500/20' : ''
     )
   };
 
@@ -134,7 +134,7 @@ const Input = forwardRef(({
     <div className="relative">
       {/* Regular label for non-floating variants */}
       {label && variant !== 'floating' && (
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
         </label>
@@ -195,7 +195,7 @@ const Input = forwardRef(({
       {(helperText || error) && (
         <p className={combineClasses(
           'mt-2 text-sm',
-          error ? 'text-red-600' : 'text-gray-500'
+          error ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'
         )}>
           {error || helperText}
         </p>

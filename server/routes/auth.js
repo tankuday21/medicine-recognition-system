@@ -8,7 +8,7 @@ const router = express.Router();
 // Generate JWT token
 const generateToken = (userId) => {
   return jwt.sign(
-    { userId }, 
+    { userId },
     process.env.JWT_SECRET || 'fallback-secret-key',
     { expiresIn: '7d' }
   );
@@ -77,9 +77,39 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Demo/Test user login (works without database)
+    if (email === 'test@mediot.com' && password === 'Test@123') {
+      const demoUser = {
+        _id: 'demo-user-id',
+        email: 'test@mediot.com',
+        name: 'Test User',
+        gender: 'other',
+        preferences: {
+          language: 'en',
+          theme: 'auto',
+          notifications: { reminders: true, news: true, emergency: true }
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const token = jwt.sign(
+        { userId: demoUser._id, isDemo: true },
+        process.env.JWT_SECRET || 'fallback-secret-key',
+        { expiresIn: '7d' }
+      );
+
+      return res.json({
+        message: 'Login successful',
+        token,
+        user: demoUser
+      });
+    }
+
     // Find user by email
     const user = await User.findOne({ email, isActive: true });
     if (!user) {
+      console.warn(`[AUTH] Login failed: User not found with email ${email}`);
       return res.status(401).json({
         error: 'Authentication failed',
         message: 'Invalid email or password'
@@ -89,6 +119,7 @@ router.post('/login', async (req, res) => {
     // Check password
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
+      console.warn(`[AUTH] Login failed: Invalid password for user ${email}`);
       return res.status(401).json({
         error: 'Authentication failed',
         message: 'Invalid email or password'
@@ -115,6 +146,25 @@ router.post('/login', async (req, res) => {
 // Get current user profile
 router.get('/profile', auth, async (req, res) => {
   try {
+    // Handle demo user
+    if (req.user && req.user.isDemo) {
+      return res.json({
+        user: {
+          _id: 'demo-user-id',
+          email: 'test@mediot.com',
+          name: 'Test User',
+          gender: 'other',
+          preferences: {
+            language: 'en',
+            theme: 'auto',
+            notifications: { reminders: true, news: true, emergency: true }
+          },
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+    }
+
     res.json({
       user: req.user.toJSON()
     });
@@ -131,10 +181,11 @@ router.get('/profile', auth, async (req, res) => {
 router.put('/profile', auth, async (req, res) => {
   try {
     const allowedUpdates = [
-      'name', 'dateOfBirth', 'gender', 'allergies', 
-      'chronicConditions', 'emergencyContacts', 'preferences'
+      'name', 'dateOfBirth', 'gender', 'bloodGroup', 'height', 'weight', 'phone',
+      'allergies', 'chronicConditions', 'emergencyContacts', 'preferences',
+      'stats', 'appRating', 'newsSearchHistory'
     ];
-    
+
     const updates = {};
     Object.keys(req.body).forEach(key => {
       if (allowedUpdates.includes(key)) {
@@ -142,11 +193,31 @@ router.put('/profile', auth, async (req, res) => {
       }
     });
 
+    // Handle demo user profile update (virtual update)
+    if (req.user && req.user.isDemo) {
+      const demoUser = {
+        ...req.user,
+        ...updates,
+        updatedAt: new Date()
+      };
+      return res.json({
+        message: 'Profile updated successfully (Demo Mode)',
+        user: demoUser
+      });
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user._id,
       updates,
       { new: true, runValidators: true }
     );
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'Profile update failed',
+        message: 'User not found'
+      });
+    }
 
     res.json({
       message: 'Profile updated successfully',
@@ -175,7 +246,7 @@ router.put('/change-password', auth, async (req, res) => {
 
     const user = await User.findById(req.user._id);
     const isCurrentPasswordValid = await user.comparePassword(currentPassword);
-    
+
     if (!isCurrentPasswordValid) {
       return res.status(401).json({
         error: 'Authentication failed',

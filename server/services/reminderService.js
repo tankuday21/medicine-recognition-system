@@ -9,10 +9,10 @@ class ReminderService {
   async createReminder(userId, reminderData) {
     try {
       console.log(`📅 Creating reminder for user: ${userId}`);
-      
+
       // Validate required fields
       const { medicineName, dosage, frequency, startDate, times } = reminderData;
-      
+
       if (!medicineName || !dosage || !frequency || !startDate || !times || times.length === 0) {
         return {
           success: false,
@@ -84,10 +84,10 @@ class ReminderService {
   // Get user's reminders
   async getUserReminders(userId, options = {}) {
     try {
-      const { 
-        isActive = null, 
-        limit = 20, 
-        offset = 0, 
+      const {
+        isActive = null,
+        limit = 20,
+        offset = 0,
         sortBy = 'createdAt',
         sortOrder = 'desc'
       } = options;
@@ -150,7 +150,7 @@ class ReminderService {
       // Update allowed fields
       const allowedFields = ['medicineName', 'dosage', 'frequency', 'startDate', 'endDate', 'times', 'isActive', 'notes'];
       const updates = {};
-      
+
       allowedFields.forEach(field => {
         if (updateData[field] !== undefined) {
           updates[field] = updateData[field];
@@ -221,7 +221,7 @@ class ReminderService {
       console.log(`💊 Logging dose for reminder: ${reminderId}`);
 
       const { scheduledTime, status, takenTime, notes } = logData;
-      
+
       if (!scheduledTime || !status) {
         return {
           success: false,
@@ -290,29 +290,38 @@ class ReminderService {
 
       const today = new Date();
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
 
+      // Find active reminders that are valid for today
+      // startDate <= endOfDay (Started before or today)
+      // endDate >= startOfDay (Ends today or in future)
+      // Fetch all active reminders that started before or on today
+      // We process endDate and frequency filtering in memory for maximum reliability
       const reminders = await Reminder.find({
         userId,
         isActive: true,
-        startDate: { $lte: today },
-        $or: [
-          { endDate: { $exists: false } },
-          { endDate: { $gte: today } }
-        ]
+        startDate: { $lte: endOfDay }
       }).populate('medicineId', 'name genericName manufacturer');
 
       // Generate today's schedule
       const todaysSchedule = [];
-      
+
       reminders.forEach(reminder => {
+        // Verify frequency (check if this reminder is actually for today)
+        if (!this.isReminderActiveOnDate(reminder, today)) {
+          return;
+        }
+
         reminder.times.forEach(time => {
           const [hours, minutes] = time.split(':').map(Number);
           const scheduledDateTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes);
-          
+
           // Check if this dose was already logged
           const logEntry = reminder.adherenceLog.find(
-            log => log.scheduledTime.getTime() === scheduledDateTime.getTime()
+            log => {
+              const logTime = new Date(log.scheduledTime);
+              return Math.abs(logTime - scheduledDateTime) < 60000; // Match within 1 minute
+            }
           );
 
           todaysSchedule.push({
@@ -323,7 +332,8 @@ class ReminderService {
             status: logEntry ? logEntry.status : 'pending',
             takenTime: logEntry ? logEntry.takenTime : null,
             notes: logEntry ? logEntry.notes : '',
-            medicine: reminder.medicineId
+            medicine: reminder.medicineId,
+            isActive: reminder.isActive
           });
         });
       });
@@ -331,6 +341,7 @@ class ReminderService {
       // Sort by scheduled time
       todaysSchedule.sort((a, b) => a.scheduledTime - b.scheduledTime);
 
+      console.log(`✅ Found ${todaysSchedule.length} doses for today`);
       return {
         success: true,
         data: todaysSchedule
@@ -501,7 +512,7 @@ class ReminderService {
 
       const start = new Date(startDate);
       const end = new Date(endDate);
-      
+
       // Get all reminders for the user
       const reminders = await Reminder.find({
         userId,
@@ -522,7 +533,7 @@ class ReminderService {
 
       while (currentDate <= end) {
         const dateKey = currentDate.toISOString().split('T')[0];
-        
+
         // Only calculate for past and current dates
         if (currentDate <= new Date()) {
           const dayAdherence = await this.calculateDayAdherence(reminders, currentDate);
@@ -536,7 +547,7 @@ class ReminderService {
             };
           }
         }
-        
+
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
@@ -561,7 +572,7 @@ class ReminderService {
   async calculateDayAdherence(reminders, date) {
     const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const dateKey = date.toISOString().split('T')[0];
-    
+
     let totalExpected = 0;
     let totalTaken = 0;
     const details = [];
@@ -571,10 +582,10 @@ class ReminderService {
       if (this.isReminderActiveOnDate(reminder, date)) {
         const expectedDoses = this.getExpectedDosesForDay(reminder, date);
         const takenDoses = this.getTakenDosesForDay(reminder, date);
-        
+
         totalExpected += expectedDoses;
         totalTaken += takenDoses;
-        
+
         details.push({
           reminderId: reminder._id,
           medicineName: reminder.medicineName,
@@ -599,11 +610,11 @@ class ReminderService {
   isReminderActiveOnDate(reminder, date) {
     const reminderStart = new Date(reminder.startDate);
     const reminderEnd = reminder.endDate ? new Date(reminder.endDate) : null;
-    
+
     // Check if date is within reminder range
     if (date < reminderStart) return false;
     if (reminderEnd && date > reminderEnd) return false;
-    
+
     // Check frequency-specific rules
     switch (reminder.frequency) {
       case 'daily':
@@ -626,7 +637,7 @@ class ReminderService {
   // Get expected doses for a specific day
   getExpectedDosesForDay(reminder, date) {
     if (!this.isReminderActiveOnDate(reminder, date)) return 0;
-    
+
     // Return the number of times per day for this reminder
     return reminder.times ? reminder.times.length : 1;
   }
@@ -634,13 +645,13 @@ class ReminderService {
   // Get taken doses for a specific day
   getTakenDosesForDay(reminder, date) {
     const dateKey = date.toISOString().split('T')[0];
-    
-    // Count logs for this date
-    const dayLogs = reminder.adherenceLogs?.filter(log => {
-      const logDate = new Date(log.timestamp).toISOString().split('T')[0];
+
+    // Count logs for this date (using adherenceLog from the model)
+    const dayLogs = reminder.adherenceLog?.filter(log => {
+      const logDate = new Date(log.scheduledTime).toISOString().split('T')[0];
       return logDate === dateKey && log.status === 'taken';
     }) || [];
-    
+
     return dayLogs.length;
   }
 
@@ -679,7 +690,7 @@ class ReminderService {
   calculateCurrentStreak(adherenceData) {
     const sortedDates = Object.keys(adherenceData).sort().reverse();
     let streak = 0;
-    
+
     for (const date of sortedDates) {
       const data = adherenceData[date];
       if (data.status === 'complete') {
@@ -688,7 +699,7 @@ class ReminderService {
         break;
       }
     }
-    
+
     return streak;
   }
 }

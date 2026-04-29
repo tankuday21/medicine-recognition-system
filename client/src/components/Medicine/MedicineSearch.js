@@ -5,13 +5,22 @@ import {
   XMarkIcon,
   ClockIcon
 } from '@heroicons/react/24/outline';
+import { useLanguage } from '../../contexts/LanguageContext';
 
-const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." }) => {
-  const [query, setQuery] = useState('');
+const MedicineSearch = ({ onSelectMedicine, placeholder, initialValue, onQueryChange }) => {
+  const { t } = useLanguage();
+  const [query, setQuery] = useState(initialValue || '');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [recentSearches, setRecentSearches] = useState([]);
+
+  // Sync with initialValue if it changes
+  useEffect(() => {
+    if (initialValue !== undefined) {
+      setQuery(initialValue);
+    }
+  }, [initialValue]);
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -65,8 +74,12 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
   }, [query, searchMedicines]);
 
   const handleInputChange = (e) => {
-    setQuery(e.target.value);
+    const val = e.target.value;
+    setQuery(val);
     setIsOpen(true);
+    if (onQueryChange) {
+      onQueryChange(val);
+    }
   };
 
   const handleSelectMedicine = (medicine) => {
@@ -85,6 +98,10 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
     if (onSelectMedicine) {
       onSelectMedicine(medicine);
     }
+
+    if (onQueryChange) {
+      onQueryChange(medicine.name);
+    }
   };
 
   const handleRecentSearch = (medicine) => {
@@ -95,6 +112,9 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
     setQuery('');
     setResults([]);
     setIsOpen(false);
+    if (onQueryChange) {
+      onQueryChange('');
+    }
   };
 
   const clearRecentSearches = () => {
@@ -105,25 +125,26 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
   return (
     <div className="relative">
       {/* Search Input */}
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+      <div className="relative group">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
         </div>
         <input
           type="text"
           value={query}
           onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
-          placeholder={placeholder}
-          className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-base min-h-[44px]"
+          placeholder={placeholder || t('medicine.searchMedicines')}
+          className="block w-full !pl-14 pr-12 py-3.5 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-white transition-all text-base min-h-[48px]"
         />
         {query && (
           <button
+            type="button"
             onClick={clearSearch}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center touch-target"
+            className="absolute inset-y-0 right-0 pr-4 flex items-center touch-target"
             aria-label="Clear search"
           >
-            <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+            <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-red-500 transition-colors" />
           </button>
         )}
       </div>
@@ -135,7 +156,7 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
           {isLoading && (
             <div className="px-4 py-3 text-center">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-sm text-gray-500 mt-2">Searching...</p>
+              <p className="text-sm text-gray-500 mt-2">{t('common.searching')}</p>
             </div>
           )}
 
@@ -143,7 +164,7 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
           {!isLoading && results.length > 0 && (
             <div>
               <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide bg-gray-50">
-                Search Results
+                {t('medicine.searchResults')}
               </div>
               {results.map((medicine) => (
                 <button
@@ -188,7 +209,7 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
           {/* No Results */}
           {!isLoading && query && results.length === 0 && (
             <div className="px-4 py-3 text-center">
-              <p className="text-sm text-gray-500">No medicines found for "{query}"</p>
+              <p className="text-sm text-gray-500">{t('medicine.noMedicinesFound')} "{query}"</p>
             </div>
           )}
 
@@ -196,12 +217,12 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
           {!query && recentSearches.length > 0 && (
             <div>
               <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide bg-gray-50 flex items-center justify-between">
-                <span>Recent Searches</span>
+                <span>{t('medicine.recentSearches')}</span>
                 <button
                   onClick={clearRecentSearches}
                   className="text-xs text-blue-600 hover:text-blue-800"
                 >
-                  Clear
+                  {t('common.clear')}
                 </button>
               </div>
               {recentSearches.map((medicine) => (
@@ -231,7 +252,7 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
           {/* Empty State */}
           {!query && recentSearches.length === 0 && (
             <div className="px-4 py-3 text-center">
-              <p className="text-sm text-gray-500">Start typing to search medicines</p>
+              <p className="text-sm text-gray-500">{t('medicine.startTyping')}</p>
             </div>
           )}
         </div>
@@ -250,7 +271,9 @@ const MedicineSearch = ({ onSelectMedicine, placeholder = "Search medicines..." 
 
 MedicineSearch.propTypes = {
   onSelectMedicine: PropTypes.func,
-  placeholder: PropTypes.string
+  placeholder: PropTypes.string,
+  initialValue: PropTypes.string,
+  onQueryChange: PropTypes.func
 };
 
 export default MedicineSearch;

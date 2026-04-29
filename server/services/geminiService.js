@@ -1,9 +1,16 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+require('dotenv').config();
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
+const OpenAI = require('openai');
 const fs = require('fs-extra');
 const path = require('path');
+const nvidiaService = require('./nvidiaService');
 
 class GeminiService {
   constructor() {
+    console.log('[DEBUG-STARTUP] process.env.SAMBANOVA_API_KEY present:', !!process.env.SAMBANOVA_API_KEY);
+    console.log('[DEBUG-STARTUP] process.env.AI_MODEL:', process.env.AI_MODEL);
+    console.log('🔑 Gemini API Key present:', !!process.env.GEMINI_API_KEY);
+
     if (!process.env.GEMINI_API_KEY) {
       console.error('[ERROR] GEMINI_API_KEY is required');
       throw new Error('GEMINI_API_KEY is required');
@@ -11,20 +18,296 @@ class GeminiService {
 
     try {
       this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      // Use gemini-1.5-flash for faster responses (or gemini-2.5-pro for better accuracy)
-      this.model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          temperature: 0.4,
-          topK: 32,
-          topP: 1,
-          maxOutputTokens: 2048,
+
+      // Primary and Backup Models as requested by user
+      this.models = [
+        'models/gemini-3.1-flash-lite-preview',
+        'models/gemini-3.1-pro',
+        'models/gemini-3.1-flash',
+        'models/gemini-3.0-pro',
+        'models/gemini-2.5-pro'
+      ];
+
+      this.currentModelIndex = 0;
+      this.safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      ];
+
+      // Initialize with the primary model
+      this.initModel(this.models[0]);
+
+      // Initialize SambaNova clients for faster chat (Multi-Key Rotation)
+      this.sambaNovaClients = [];
+      const sambaKeys = [
+        process.env.SAMBANOVA_API_KEY, 
+        process.env.SAMBANOVA_API_KEY_2, 
+        process.env.SAMBANOVA_API_KEY_3
+      ].filter(Boolean);
+      
+      sambaKeys.forEach((key, index) => {
+        try {
+          const client = new OpenAI({
+            apiKey: key,
+            baseURL: "https://api.sambanova.ai/v1",
+          });
+          this.sambaNovaClients.push(client);
+          console.log(`[INFO] SambaNova client ${index + 1} initialized.`);
+        } catch (e) {
+          console.error(`[ERROR] Failed to init SambaNova client ${index + 1}:`, e.message);
         }
       });
-      console.log('[INFO][SUCCESS] Gemini AI service initialized with gemini-1.5-flash');
+
+      this.sambaNovaModel = process.env.AI_MODEL || 'DeepSeek-V3.1';
+      
+      // Smart API: State tracking for clients
+      this.clientStates = this.sambaNovaClients.map(() => ({
+        disabledUntil: 0
+      }));
+      
+      // Start proactive health check service (Disabled as requested)
+      // this.startHealthCheck();
     } catch (error) {
       console.error('[ERROR] Failed to initialize Gemini AI service:', error);
       throw error;
+    }
+  }
+
+  initModel(modelName) {
+    console.log(`[INFO] Initializing Gemini model: ${modelName}`);
+    this.model = this.genAI.getGenerativeModel({
+      model: modelName,
+      safetySettings: this.safetySettings,
+      generationConfig: {
+        temperature: 0.2,
+        topK: 32,
+        topP: 1,
+        maxOutputTokens: 8192,
+      }
+    });
+  }
+
+  /**
+   * Helper to format mixed parts (strings, images) for the SDK
+   */
+  _formatParts(args) {
+    if (!Array.isArray(args)) args = [args];
+    return args.map(arg => {
+      if (typeof arg === 'string') return { text: arg };
+      // If it has inlineData, it's already a Part object
+      return arg;
+    });
+  }
+
+  /**
+   * Helper to generate content with model fallback
+   */
+  async generateContentWithFallback(promptArgs, options = {}) {
+    // Try NVIDIA first as requested by user
+    try {
+      console.log(`[INFO] Attempting generation with NVIDIA (${nvidiaService.model})...`);
+      
+      // Convert promptArgs to NVIDIA messages format
+      let messages = [];
+      if (typeof promptArgs === 'string') {
+        messages = [{ role: 'user', content: promptArgs }];
+      } else if (Array.isArray(promptArgs)) {
+        const content = promptArgs.map(arg => {
+          if (typeof arg === 'string') return { type: 'text', text: arg };
+          if (arg.inlineData) return { 
+            type: 'image_url', 
+            image_url: { url: `data:${arg.inlineData.mimeType};base64,${arg.inlineData.data}` } 
+          };
+          return null;
+        }).filter(Boolean);
+        messages = [{ role: 'user', content }];
+      }
+
+      const nvidiaResult = await nvidiaService.client.chat.completions.create({
+        model: nvidiaService.model,
+        messages: messages,
+        temperature: options.generationConfig?.temperature || 0.2,
+        max_tokens: options.generationConfig?.maxOutputTokens || 4096,
+      });
+
+      // Wrap in a result object compatible with the rest of the code
+      return {
+        response: {
+          text: () => nvidiaResult.choices[0].message.content
+        }
+      };
+    } catch (nvidiaError) {
+      console.warn('[WARN] NVIDIA failed in generateContentWithFallback, falling back to Gemini:', nvidiaError.message);
+    }
+
+    for (let i = 0; i < this.models.length; i++) {
+      const modelName = this.models[i];
+      try {
+        if (i > 0) this.initModel(modelName); // Switch model if not first attempt
+
+        console.log(`[INFO] Attempting generation with ${modelName}...`);
+
+        // Prepare request
+        let request = promptArgs;
+        if (options && options.generationConfig) {
+          // If config is provided, we must use the object format for generateContent
+          // promptArgs is expected to be [prompt, image] or similar array of parts
+          // We need to ensure it's in the format expected by 'contents' if strictly required, 
+          // but the SDK often is flexible. However, strictly:
+          // request = { contents: [{ role: 'user', parts: ... }], generationConfig: ... }
+          // To be safe and simple: pass options as 2nd arg? No, SDK method signature: generateContent(request)
+
+          // Construct the request object merging content and config
+          request = {
+            contents: [{ role: 'user', parts: this._formatParts(promptArgs) }],
+            generationConfig: options.generationConfig
+          };
+        }
+
+        const result = await this.model.generateContent(request);
+        return result; // Success!
+      } catch (error) {
+        console.warn(`[WARN] Failed with ${modelName}:`, error.message);
+
+        // If it's the last model, throw the error
+        if (i === this.models.length - 1) {
+          console.error('[ERROR] All fallback models failed.');
+          throw error;
+        }
+        console.log(`[INFO] Switching to backup model...`);
+      }
+    }
+  }
+
+  /**
+   * Summarize a batch of news articles using DeepSeek (via SambaNova) or Gemini
+   * @param {Array} articles - Array of article objects { title, description, content }
+   * @returns {Object} Summarized articles
+   */
+  async summarizeNewsBatch(articles) {
+    try {
+      console.log(`[AI-NEWS] Summarizing ${articles.length} news articles with AI (NVIDIA Primary)...`);
+
+      const articlesText = articles.slice(0, 10).map((a, i) => 
+        `Article ${i + 1}:\nTitle: ${a.title}\nDescription: ${a.description || ''}\nContent: ${a.content || ''}`
+      ).join('\n\n---\n\n');
+
+      const prompt = `
+        You are a premium medical news editor. I will provide you with a list of ${articles.length} news articles.
+        Your task is to create a compelling, editorial-style summary for each one (approximately 40-60 words).
+        
+        Style Guidelines:
+        1. Professional & Engaging: Write like a high-end medical magazine.
+        2. Informative: Include key facts, data, or the "bottom line" for patients.
+        3. Clear Structure: Start with a punchy opening and follow with the essential takeaway.
+        4. Mobile-First: Ensure the flow is smooth for a vertical reading experience.
+
+        Return ONLY a JSON array of strings, where each string corresponds to the summary of the article at that index.
+        Example: ["Researchers have discovered a breakthrough in Alzheimer's treatment using a new class of antibodies. The phase 3 clinical trial showed a 30% reduction in memory decline over 18 months, marking a significant milestone in neurodegenerative care. This drug is now awaiting FDA priority review.", ...]
+
+        Articles:
+        ${articlesText}
+      `;
+
+      let summaries = null;
+      let usedFallback = false;
+
+      // Try NVIDIA first as requested by user
+      try {
+        console.log(`[AI-NEWS] Attempting summarization with NVIDIA (${nvidiaService.model})...`);
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 4096,
+        });
+        const responseText = nvidiaResult.choices[0].message.content;
+        summaries = this._extractJsonArray(responseText);
+        if (summaries) {
+          console.log(`[AI-NEWS] Summarization successful with NVIDIA`);
+        }
+      } catch (nvidiaError) {
+        console.warn(`[AI-NEWS] NVIDIA failed for summarization, falling back to SambaNova/Gemini:`, nvidiaError.message);
+        
+        // Try each SambaNova client in rotation
+        if (this.sambaNovaClients && this.sambaNovaClients.length > 0) {
+          for (let i = 0; i < this.sambaNovaClients.length; i++) {
+            // Check if key is currently disabled
+            if (Date.now() < this.clientStates[i].disabledUntil) {
+              console.log(`[AI-NEWS] Skipping SambaNova Key ${i + 1} (Cooldown: ${Math.round((this.clientStates[i].disabledUntil - Date.now()) / 60000)}m remaining)`);
+              if (i === this.sambaNovaClients.length - 1) {
+                console.warn(`[AI-NEWS] All SambaNova keys are on cooldown, falling back to Gemini.`);
+                usedFallback = true;
+              }
+              continue;
+            }
+
+            try {
+              console.log(`[AI-NEWS] Using SambaNova Key ${i + 1} (${this.sambaNovaModel})...`);
+              const completion = await this.sambaNovaClients[i].chat.completions.create({
+                model: this.sambaNovaModel,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.1
+              });
+              const responseText = completion.choices[0].message.content;
+              summaries = this._extractJsonArray(responseText);
+              if (summaries) break; // Success!
+            } catch (sambaError) {
+              console.warn(`[AI-NEWS] SambaNova Key ${i + 1} failed:`, sambaError.message);
+              
+              // If rate limited, disable for 1 hour
+              if (sambaError.status === 429) {
+                this._disableKey(i, 3600000);
+              }
+
+              if (i === this.sambaNovaClients.length - 1) {
+                console.warn(`[AI-NEWS] All SambaNova keys failed, falling back to Gemini.`);
+                usedFallback = true;
+              }
+            }
+          }
+        } else {
+          usedFallback = true;
+        }
+      }
+
+      if (usedFallback || !summaries) {
+        console.log(`[AI-NEWS] Using Gemini for summarization...`);
+        const result = await this.generateContentWithFallback(prompt);
+        const response = await result.response;
+        summaries = this._extractJsonArray(response.text());
+      }
+
+      console.log(`[AI-NEWS] Successfully summarized ${summaries.length} articles`);
+      return { success: true, data: summaries };
+
+    } catch (error) {
+      console.error('[AI-NEWS] Summarization error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Helper to extract JSON array from text
+   */
+  _extractJsonArray(text) {
+    try {
+      if (!text) return [];
+      
+      // Remove potential markdown code blocks
+      const cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+
+      const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      throw new Error('No JSON array found');
+    } catch (e) {
+      console.warn('[WARN] JSON array extraction failed:', e.message);
+      // Fallback: split by lines if it looks like a list
+      return text.split('\n').filter(line => line.trim().length > 10).slice(0, 10);
     }
   }
 
@@ -35,7 +318,7 @@ class GeminiService {
    */
   async quickMedicineVerification(imagePath) {
     try {
-      console.log('[INFO][INFO] Starting quick medicine name verification...');
+      console.log('[INFO] Starting quick medicine name verification...');
 
       // Read image file
       let imageData;
@@ -86,41 +369,61 @@ class GeminiService {
       `;
 
       // Generate content with image and prompt
-      console.log('[INFO]🤖 Sending quick verification request to Gemini...');
-      const result = await this.model.generateContent([prompt, imageData]);
-      const response = await result.response;
-      const text = response.text();
-      console.log('[INFO][INFO] Received quick verification response from Gemini');
+      console.log('[INFO]🤖 Sending quick verification request to NVIDIA...');
+      let text = '';
+      try {
+        const base64Data = imagePath.startsWith('data:') 
+          ? imagePath.split(',')[1] 
+          : (await fs.readFile(imagePath)).toString('base64');
+        const mimeType = imagePath.startsWith('data:') 
+          ? imagePath.split(';')[0].split(':')[1] 
+          : this.getMimeType(imagePath);
+
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 4096,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        console.log('[INFO] Received quick verification response from NVIDIA');
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA vision failed, falling back to Gemini:', nvidiaError.message);
+        console.log('[INFO]🤖 Sending quick verification request to Gemini...');
+        const result = await this.model.generateContent([prompt, imageData]);
+        const response = await result.response;
+        text = response.text();
+        console.log('[INFO] Received quick verification response from Gemini');
+      }
 
       // Parse JSON response
-      let verificationData;
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          verificationData = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('No JSON found in response');
+      const verificationData = this._extractJson(text, {
+        identified: false,
+        confidence: 1,
+        medicineName: {
+          brandName: null,
+          genericName: null,
+          primaryName: null
+        },
+        quickIdentification: {
+          shape: null,
+          color: null,
+          visibleText: [],
+          markings: null
         }
-      } catch (parseError) {
-        console.warn('[WARN] Failed to parse JSON response, creating fallback...');
-        verificationData = {
-          identified: false,
-          confidence: 1,
-          medicineName: {
-            brandName: null,
-            genericName: null,
-            primaryName: null
-          },
-          quickIdentification: {
-            shape: null,
-            color: null,
-            visibleText: [],
-            markings: null
-          },
-          verificationNeeded: true,
-          reasoning: "Failed to parse AI response"
-        };
-      }
+      });
 
       console.log('[INFO][SUCCESS] Quick medicine verification completed');
 
@@ -228,48 +531,74 @@ class GeminiService {
       `;
 
       // Generate content with all images and prompt
-      console.log('[INFO]🤖 Sending multi-image verification request to gemini-2.5-pro...');
-      const imageDataArray = imageAnalyses.map(img => img.imageData);
-      const result = await this.model.generateContent([prompt, ...imageDataArray]);
-      const response = await result.response;
-      const text = response.text();
-      console.log('[INFO][INFO] Received multi-image verification response from Gemini');
+      console.log(`[INFO]🤖 Sending multi-image verification request to NVIDIA...`);
+      let text = '';
+      try {
+        const nvidiaContent = [{ type: "text", text: prompt }];
+        
+        for (const imgAnalysis of imageAnalyses) {
+          const imagePath = imgAnalysis.imagePath;
+          const base64Data = imagePath.startsWith('data:') 
+            ? imagePath.split(',')[1] 
+            : (await fs.readFile(imagePath)).toString('base64');
+          const mimeType = imagePath.startsWith('data:') 
+            ? imagePath.split(';')[0].split(':')[1] 
+            : this.getMimeType(imagePath);
+            
+          nvidiaContent.push({
+            type: "image_url",
+            image_url: {
+              url: `data:${mimeType};base64,${base64Data}`,
+            },
+          });
+        }
+
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [
+            {
+              role: "user",
+              content: nvidiaContent,
+            },
+          ],
+          max_tokens: 4096,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        console.log('[INFO] Received multi-image verification response from NVIDIA');
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA multi-vision failed, falling back to Gemini:', nvidiaError.message);
+        console.log(`[INFO]🤖 Sending multi-image verification request to Gemini...`);
+        const imageDataArray = imageAnalyses.map(img => img.imageData);
+        const result = await this.model.generateContent([prompt, ...imageDataArray]);
+        const response = await result.response;
+        text = response.text();
+        console.log('[INFO] Received multi-image verification response from Gemini');
+      }
 
       // Parse JSON response
-      let verificationData;
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          verificationData = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('No JSON found in response');
+      const verificationData = this._extractJson(text, {
+        identified: false,
+        confidence: 1,
+        medicineName: {
+          brandName: null,
+          genericName: null,
+          primaryName: null
+        },
+        quickIdentification: {
+          shape: null,
+          color: null,
+          visibleText: [],
+          markings: null
+        },
+        imageContributions: {},
+        verificationNeeded: true,
+        reasoning: "Failed to parse multi-image AI response",
+        dataQuality: {
+          completeness: 1,
+          consistency: 1,
+          conflictingInfo: []
         }
-      } catch (parseError) {
-        console.warn('[WARN] Failed to parse multi-image JSON response, creating fallback...');
-        verificationData = {
-          identified: false,
-          confidence: 1,
-          medicineName: {
-            brandName: null,
-            genericName: null,
-            primaryName: null
-          },
-          quickIdentification: {
-            shape: null,
-            color: null,
-            visibleText: [],
-            markings: null
-          },
-          imageContributions: {},
-          verificationNeeded: true,
-          reasoning: "Failed to parse multi-image AI response",
-          dataQuality: {
-            completeness: 1,
-            consistency: 1,
-            conflictingInfo: []
-          }
-        };
-      }
+      });
 
       // Add metadata about the multi-image analysis
       verificationData.multiImageAnalysis = {
@@ -395,25 +724,47 @@ class GeminiService {
       `;
 
       // Generate comprehensive content
-      console.log('[INFO]🤖 Sending comprehensive analysis request to Gemini...');
-      const result = await this.model.generateContent([prompt, imageData]);
-      const response = await result.response;
-      const text = response.text();
-      console.log('[INFO] Received comprehensive response from Gemini');
+      console.log('[INFO]🤖 Sending comprehensive analysis request to NVIDIA...');
+      let text = '';
+      try {
+        const base64Data = imagePath.startsWith('data:') 
+          ? imagePath.split(',')[1] 
+          : (await fs.readFile(imagePath)).toString('base64');
+        const mimeType = imagePath.startsWith('data:') 
+          ? imagePath.split(';')[0].split(':')[1] 
+          : this.getMimeType(imagePath);
+
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 4096,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        console.log('[INFO] Received comprehensive response from NVIDIA');
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA vision failed, falling back to Gemini:', nvidiaError.message);
+        console.log('[INFO]🤖 Sending comprehensive analysis request to Gemini...');
+        const result = await this.model.generateContent([prompt, imageData]);
+        const response = await result.response;
+        text = response.text();
+        console.log('[INFO] Received comprehensive response from Gemini');
+      }
 
       // Parse JSON response
-      let analysisData;
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          analysisData = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('No JSON found in response');
-        }
-      } catch (parseError) {
-        console.warn('[WARN] Failed to parse comprehensive JSON, creating fallback...');
-        analysisData = this.createComprehensiveFallbackResponse(text, verifiedMedicineName);
-      }
+      const analysisData = this._extractJson(text, this.createComprehensiveFallbackResponse(text, verifiedMedicineName));
 
       // Validate and enhance response
       analysisData = this.validateAndEnhanceResponse(analysisData);
@@ -1111,69 +1462,167 @@ class GeminiService {
    * @param {Object} userContext - User profile and health data context
    * @returns {Object} Chat response with AI-generated content
    */
-  async generateChatResponse(message, conversationHistory = [], userContext = {}) {
+  async generateChatResponse(message, conversationHistory = [], userContext = {}, preferredLanguage = 'en') {
     try {
-      console.log('[INFO] Generating chat response with Gemini AI...');
+      console.log(`[INFO] Conversation history has ${conversationHistory.length} messages`);
 
       // Build conversation context
       const contextPrompt = this.buildHealthChatContext(userContext);
       const historyPrompt = this.buildConversationHistory(conversationHistory);
 
-      // Main health assistant prompt
+      // Main health assistant prompt - Premium & Detailed
       const systemPrompt = `
-        You are Mediot AI, a knowledgeable and empathetic healthcare assistant. Your role is to:
+        You are Mediot AI, a premium, professional, and friendly healthcare assistant. 
 
-        [PRIMARY FUNCTIONS]:
-        - Provide accurate, evidence-based health information
-        - Help users understand medications, symptoms, and health conditions
-        - Offer guidance on when to seek professional medical care
-        - Support medication adherence and health management
-        - Provide emotional support for health-related concerns
+        [CRITICAL - LANGUAGE MATCHING]:
+        - THE USER'S CURRENT SELECTED APP LANGUAGE IS: "${preferredLanguage}".
+        - ALWAYS respond in the SAME LANGUAGE as the user's current message, UNLESS they switch to another language.
+        - IF the user's message is in English but their preferred language is "${preferredLanguage}", you may respond in "${preferredLanguage}" but include English terms for clarity if needed.
+        - IF the user's message is in "${preferredLanguage}", respond EXCLUSIVELY in "${preferredLanguage}".
+        - Match their tone and style exactly.
 
-        [CRITICAL SAFETY RULES]:
-        - NEVER provide specific medical diagnoses
-        - ALWAYS recommend consulting healthcare professionals for serious concerns
-        - Do NOT prescribe medications or change dosages
-        - Clearly state when information is general vs. personalized
-        - Emphasize that you're an AI assistant, not a replacement for medical care
+        [PREMIUM FORMATTING RULES]:
+        - ALWAYS use **bold text** for important medical terms, medicine names, and key insights.
+        - ALWAYS use bullet points (-) or numbered lists (1.) for lists, instructions, or multiple points.
+        - ALWAYS use the following keywords (with a colon) to highlight critical information:
+          * "Warning:" for dangerous side effects or contraindications.
+          * "Caution:" for things the user should be careful about.
+          * "Note:" for helpful additional information.
+          * "Tip:" for practical health advice.
+          * "Important:" for essential instructions.
+        - These keywords will be color-coded in the UI, so use them to make your response visually professional.
 
-        [COMMUNICATION STYLE]:
-        - Be warm, empathetic, and supportive
-        - Use clear, non-technical language when possible
-        - Provide actionable, practical advice
-        - Ask clarifying questions when needed
-        - Show genuine concern for the user's wellbeing
+        [DETAILED RESPONSES]:
+        - Provide detailed, informative, and structured responses. 
+        - Do NOT give 1-sentence answers unless it's a simple greeting.
+        - Explain the "why" behind your health advice.
+        - Use simple language but maintain professional clinical depth.
 
-        [RESPONSE FORMAT]:
-        - Keep responses concise but comprehensive
-        - Use bullet points or numbered lists for clarity
-        - Include relevant follow-up questions
-        - Suggest next steps when appropriate
+        [CONVERSATION MEMORY]:
+        - Reference the history below to provide context-aware answers.
+        ${historyPrompt}
+
+        [SAFETY]:
+        - Recommend seeing a doctor for serious symptoms.
+        - Never diagnose or prescribe.
 
         ${contextPrompt}
-        ${historyPrompt}
 
         User's current message: "${message}"
 
-        Provide a helpful, accurate, and empathetic response:
-      `;
+        Respond ONLY with a JSON object:
+        {
+          "response": "Your detailed, formatted response",
+          "followUps": ["Follow-up question 1", "Follow-up question 2"]
+        }`;
 
-      // Generate response using Gemini
-      const result = await this.model.generateContent(systemPrompt);
-      const response = await result.response;
-      const aiResponse = response.text();
+      const startTime = Date.now();
+      let rawText = '';
+      let provider = 'NVIDIA AI';
+      let success = false;
+
+      // Try NVIDIA first as requested by user
+      try {
+        console.log(`[INFO] Attempting to generate chat response with NVIDIA (${nvidiaService.model})...`);
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message }
+          ],
+          temperature: 0.2,
+          top_p: 0.95,
+          max_tokens: 65536,
+          reasoning_budget: 16384,
+          chat_template_kwargs: {"enable_thinking":false},
+        });
+        rawText = nvidiaResult.choices[0].message.content;
+        success = true;
+        console.log(`[PERF] NVIDIA response took ${Date.now() - startTime}ms`);
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA failed, falling back to SambaNova/Gemini:', nvidiaError.message);
+        
+        const samba = this._getAvailableSambaClient();
+        if (samba) {
+          console.log(`[INFO] Generating chat response with DeepSeek-V3.1 (Key ${samba.index + 1})...`);
+          try {
+            const completion = await samba.client.chat.completions.create({
+              model: this.sambaNovaModel,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: message }
+              ],
+              temperature: 0.7,
+              max_tokens: 1024,
+            });
+            rawText = completion.choices[0].message.content;
+            provider = `SambaNova (${this.sambaNovaModel})`;
+            success = true;
+            console.log(`[PERF] DeepSeek-V3.1 response took ${Date.now() - startTime}ms`);
+          } catch (sambaError) {
+            console.warn('[WARN] SambaNova failed, falling back to Gemini:', sambaError.message);
+            if (sambaError.status === 429) this._disableKey(samba.index, 3600000);
+            const result = await this.model.generateContent(systemPrompt + "\n\nUser: " + message);
+            rawText = (await result.response).text();
+            provider = 'Gemini AI';
+            success = true;
+          }
+        } else {
+          const result = await this.model.generateContent(systemPrompt + "\n\nUser: " + message);
+          rawText = (await result.response).text();
+          provider = 'Gemini AI';
+          success = true;
+        }
+      }
 
       console.log('[SUCCESS] Chat response generated successfully');
 
-      // Analyze response for follow-up suggestions
-      const followUpSuggestions = this.generateFollowUpSuggestions(message, aiResponse, userContext);
+      // Parse JSON response
+      let aiResponse = '';
+      let followUpSuggestions = [];
+
+      try {
+        // Extract JSON from response
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          aiResponse = parsed.response || rawText;
+          followUpSuggestions = parsed.followUps || [];
+        } else {
+          // Fallback if no JSON found
+          aiResponse = rawText;
+          followUpSuggestions = this.generateFollowUpSuggestions(message, rawText, userContext);
+        }
+      } catch (parseError) {
+        console.warn('[WARN] Failed to parse JSON response, using raw text');
+        aiResponse = rawText.replace(/```json|```/g, '').trim();
+        // Try to extract if it looks like JSON was attempted
+        if (aiResponse.includes('"response"')) {
+          try {
+            const retryParse = JSON.parse(aiResponse);
+            aiResponse = retryParse.response || aiResponse;
+            followUpSuggestions = retryParse.followUps || [];
+          } catch (e) {
+            followUpSuggestions = this.generateFollowUpSuggestions(message, aiResponse, userContext);
+          }
+        } else {
+          followUpSuggestions = this.generateFollowUpSuggestions(message, aiResponse, userContext);
+        }
+      }
+
+      // Final safety check to ensure we never return empty content
+      if (!aiResponse || typeof aiResponse !== 'string' || aiResponse.trim().length === 0) {
+        console.warn('[WARN] AI response was empty, using fallback');
+        aiResponse = rawText && rawText.trim().length > 0 ? rawText : "I'm sorry, I couldn't process that request properly. Could you please rephrase it?";
+      }
 
       return {
         success: true,
         data: {
           message: aiResponse,
           timestamp: new Date().toISOString(),
-          followUpSuggestions,
+          followUpSuggestions: followUpSuggestions.slice(0, 2),
+          provider: provider,
           context: {
             conversationLength: conversationHistory.length + 1,
             userContextUsed: Object.keys(userContext).length > 0,
@@ -1192,9 +1641,8 @@ class GeminiService {
           message: "I'm sorry, I'm having trouble processing your request right now. Please try again in a moment, or contact your healthcare provider if this is urgent.",
           timestamp: new Date().toISOString(),
           followUpSuggestions: [
-            "Try rephrasing your question",
-            "Contact your healthcare provider",
-            "Visit our emergency resources if urgent"
+            "Try asking again",
+            "Contact a doctor"
           ]
         }
       };
@@ -1239,18 +1687,17 @@ class GeminiService {
    */
   buildConversationHistory(history) {
     if (!history || history.length === 0) {
-      return "Conversation history: This is the start of the conversation.";
+      return "";
     }
 
-    let historyText = "Recent conversation:\n";
+    let historyText = "\n[CONVERSATION HISTORY - Remember this context]:\n";
 
-    // Include last 5 messages for context
-    const recentHistory = history.slice(-5);
-
-    recentHistory.forEach((msg, index) => {
-      const role = msg.sender === 'user' ? 'User' : 'Assistant';
+    history.forEach((msg, index) => {
+      const role = msg.sender === 'user' ? 'User' : 'You (Assistant)';
       historyText += `${role}: ${msg.message}\n`;
     });
+
+    historyText += "\n[END OF HISTORY - Continue the conversation naturally, remembering what was discussed above]\n";
 
     return historyText;
   }
@@ -1312,13 +1759,276 @@ class GeminiService {
   }
 
   /**
+   * Generate response for medicine-specific queries
+   * @param {string} message - User's question about the medicine
+   * @param {string} medicineContext - Context about the scanned medicine
+   * @param {Array} conversationHistory - Previous messages for context
+   * @returns {Object} AI response
+   */
+  async generateMedicineQueryResponse(message, medicineContext, conversationHistory = [], preferredLanguage = 'en') {
+    try {
+      let provider = 'Gemini AI';
+      console.log(`[INFO] Generating medicine query response with ${provider}...`);
+      
+      const historyText = conversationHistory.map(m => `${m.sender}: ${m.message}`).join('\n');
+
+      const messages = [
+        { role: "system", content: "You are Mediot AI, a premium, professional, and friendly healthcare assistant." },
+        { role: "system", content: `
+          [CRITICAL - LANGUAGE MATCHING]:
+          - THE USER'S CURRENT SELECTED APP LANGUAGE IS: "${preferredLanguage}".
+          - ALWAYS respond in the SAME LANGUAGE as the user's current message, UNLESS they switch to another language.
+          - IF the user's message is in English but their preferred language is "${preferredLanguage}", you may respond in "${preferredLanguage}" but include English terms for clarity if needed.
+          - IF the user's message is in "${preferredLanguage}", respond EXCLUSIVELY in "${preferredLanguage}".
+          - Match their tone and style exactly.
+
+          [PREMIUM FORMATTING RULES]:
+          - ALWAYS use **bold text** for medicine names, dosages, and key health terms.
+          - ALWAYS use bullet points (-) or numbered lists (1.) for clarity.
+          - ALWAYS use structural keywords: "Warning:", "Caution:", "Note:", "Tip:", "Important:".
+          - Provide detailed, professional, yet easy-to-understand clinical insights.
+        ` },
+        { role: "system", content: `MEDICINE CONTEXT:\n${medicineContext}` }
+      ];
+
+      if (historyText) {
+        messages.push({ role: "system", content: `CONVERSATION HISTORY:\n${historyText}` });
+      }
+
+      messages.push({ role: "user", content: message });
+
+      const startTime = Date.now();
+      let text = '';
+      let success = false;
+      provider = 'NVIDIA AI';
+
+      // Try NVIDIA first as requested by user
+      try {
+        console.log(`[INFO] Attempting to generate medicine query with NVIDIA (${nvidiaService.model})...`);
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: messages,
+          temperature: 0.2,
+          top_p: 0.95,
+          max_tokens: 65536,
+          reasoning_budget: 16384,
+          chat_template_kwargs: {"enable_thinking":false},
+        });
+        text = nvidiaResult.choices[0].message.content;
+        success = true;
+        console.log(`[PERF] NVIDIA medicine query took ${Date.now() - startTime}ms`);
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA failed for medicine query, falling back to SambaNova/Gemini:', nvidiaError.message);
+        
+        const samba = this._getAvailableSambaClient();
+        if (samba) {
+          console.log(`[INFO] Generating medicine query with DeepSeek-V3.1 (Key ${samba.index + 1})...`);
+          try {
+            const completion = await samba.client.chat.completions.create({
+              model: this.sambaNovaModel,
+              messages: messages,
+              temperature: 0.5,
+            });
+            text = completion.choices[0].message.content;
+            provider = `SambaNova (${this.sambaNovaModel})`;
+            success = true;
+            console.log(`[PERF] DeepSeek-V3.1 medicine query took ${Date.now() - startTime}ms`);
+          } catch (sambaError) {
+            console.warn('[WARN] DeepSeek-V3.1 failed for medicine query, falling back to Gemini:', sambaError.message);
+            if (sambaError.status === 429) this._disableKey(samba.index, 3600000);
+            const result = await this.model.generateContent(`Context: ${medicineContext}\nHistory: ${historyText}\nQuestion: ${message}`);
+            text = (await result.response).text();
+            provider = 'Gemini AI';
+            success = true;
+          }
+        } else {
+          const result = await this.model.generateContent(`Context: ${medicineContext}\nHistory: ${historyText}\nQuestion: ${message}`);
+          text = (await result.response).text();
+          provider = 'Gemini AI';
+          success = true;
+        }
+      }
+
+      console.log('[SUCCESS] Medicine query response generated');
+
+      return {
+        success: true,
+        data: {
+          message: text.trim(),
+          timestamp: new Date().toISOString(),
+          provider: provider
+        }
+      };
+
+    } catch (error) {
+      console.error('[ERROR] Medicine query error:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: {
+          message: "I'm sorry, I couldn't process your question. Please try again.",
+          timestamp: new Date().toISOString()
+        }
+      };
+    }
+  }
+
+  /**
+   * Generate response for report-specific queries (Chat about report)
+   * @param {string} message - User's question about the report
+   * @param {string} reportContext - Extracted data from the report
+   * @param {Array} conversationHistory - Previous messages for context
+   * @returns {Object} AI response
+   */
+  async generateReportQueryResponse(message, reportContext, conversationHistory = [], preferredLanguage = 'en') {
+    try {
+      let provider = 'Gemini AI';
+      console.log(`[INFO] Generating report query response with ${provider}...`);
+
+      const historyText = conversationHistory.map(m => `${m.sender}: ${m.message}`).join('\n');
+      
+      const systemPrompt = `You are a medical data expert. You are helping a user understand their medical report.
+      
+REPORT CONTEXT (Extracted Data):
+${reportContext}
+
+INSTRUCTIONS:
+1. Answer the user's question specifically based on the report data provided.
+2. Be professional, clear, and reassuring.
+3. Explain medical terms in simple language.
+4. ALWAYS remind the user that this is an AI analysis and they MUST consult their doctor for final interpretation.
+5. If the user asks about something not in the report, state so and avoid speculation.
+6. Match the user's language style.
+7. [CRITICAL - LANGUAGE]: THE USER'S CURRENT SELECTED APP LANGUAGE IS: "${preferredLanguage}". ALWAYS respond in "${preferredLanguage}" or the same language as the user's current message. Match their tone and style exactly.`;
+
+      const messages = [
+        { role: "system", content: systemPrompt }
+      ];
+
+      if (historyText) {
+        messages.push({ role: "system", content: `CONVERSATION HISTORY:\n${historyText}` });
+      }
+
+      messages.push({ role: "user", content: message });
+
+      const samba = this._getAvailableSambaClient();
+      let text = '';
+      if (samba) {
+        console.log(`[INFO] Generating report query with DeepSeek-V3.1 (Key ${samba.index + 1})...`);
+        try {
+          const completion = await samba.client.chat.completions.create({
+            model: this.sambaNovaModel,
+            messages: messages,
+            temperature: 0.4,
+          });
+          text = completion.choices[0].message.content;
+          provider = `SambaNova (${this.sambaNovaModel})`;
+        } catch (sambaError) {
+          console.warn('[WARN] DeepSeek-V3.1 failed for report, falling back to Gemini:', sambaError.message);
+          if (sambaError.status === 429) this._disableKey(samba.index, 3600000);
+          const result = await this.model.generateContent(systemPrompt + "\nHistory: " + historyText + "\nUser: " + message);
+          text = (await result.response).text();
+        }
+      } else {
+        const result = await this.model.generateContent(systemPrompt + "\nHistory: " + historyText + "\nUser: " + message);
+        text = (await result.response).text();
+      }
+
+      return {
+        success: true,
+        data: {
+          message: text.trim(),
+          timestamp: new Date().toISOString(),
+          provider: provider
+        }
+      };
+    } catch (error) {
+      console.error('[ERROR] Report query error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Generate a proactive insight summary for a scanned medicine
+   * Used to "warm up" the chat context and provide instant value
+   */
+  async generateProactiveInsight(medicineData) {
+    try {
+      const name = medicineData.medicineName?.primaryName || medicineData.name || 'this medicine';
+      
+      const prompt = `You are Mediot AI. I have just scanned a medicine: ${name}.
+      Based on this data: ${JSON.stringify(medicineData)}
+      
+      Provide a very concise "Proactive Insight" for the user. 
+      FORMATTING RULES:
+      - Use **bold** for the medicine name and critical terms.
+      - Use bullet points if listing multiple facts.
+      - Keep it under 3 sentences total.
+      - Focus on the most important thing they should know (e.g., a critical use, a major warning, or a helpful tip).
+      
+      Be professional, friendly, and brief.
+      End with a friendly prompt like "Feel free to ask me anything about it!"`;
+
+      let success = false;
+      let text = '';
+
+      // Try NVIDIA first as requested by user
+      try {
+        console.log(`[PROACTIVE] Attempting to generate insight with NVIDIA (${nvidiaService.model})...`);
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.2,
+          top_p: 0.95,
+          max_tokens: 1024,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        success = true;
+        console.log(`[PROACTIVE] Insight generated successfully with NVIDIA`);
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA failed for proactive insight, falling back to SambaNova/Gemini:', nvidiaError.message);
+        
+        const samba = this._getAvailableSambaClient();
+        if (samba) {
+          console.log(`[INFO] Generating proactive insight with DeepSeek-V3.1 (Key ${samba.index + 1})...`);
+          try {
+            const completion = await samba.client.chat.completions.create({
+              model: this.sambaNovaModel,
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0.7,
+              max_tokens: 150
+            });
+            text = completion.choices[0].message.content;
+            success = true;
+          } catch (sambaError) {
+            console.warn('[WARN] DeepSeek-V3.1 failed for insight, falling back to Gemini:', sambaError.message);
+            if (sambaError.status === 429) this._disableKey(samba.index, 3600000);
+            const result = await this.model.generateContent(prompt);
+            text = (await result.response).text();
+            success = true;
+          }
+        } else {
+          const result = await this.model.generateContent(prompt);
+          text = (await result.response).text();
+          success = true;
+        }
+      }
+
+      return { success, text };
+    } catch (error) {
+      console.error('Proactive insight error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Identify pill from image using Gemini Vision API
    * @param {string} imagePath - Path to the pill image
    * @returns {Object} Pill identification result
    */
   async identifyPillFromImage(imagePath) {
     try {
-      console.log('[INFO] Starting pill identification with Gemini Vision...');
+      console.log('[INFO] Starting pill identification with AI (NVIDIA Primary)...');
 
       // Read image file
       let imageData;
@@ -1339,121 +2049,144 @@ class GeminiService {
 
       // Medicine identification prompt (works for pills, creams, syrups, tablets, etc.)
       const prompt = `
-        You are a pharmaceutical expert specializing in medicine identification. Analyze this medicine image carefully.
-        This could be a pill, tablet, capsule, cream, ointment, syrup, injection, or any other medicine form.
+        You are a pharmaceutical expert. Analyze this medicine image and identify it.
+        Look for: medicine name, brand, strength, manufacturer, ingredients on packaging/label.
 
-        Provide a JSON response with this EXACT structure:
+        IMPORTANT: You MUST return ALL fields in the JSON below. Do not skip any fields.
+
+        Return this EXACT JSON structure:
         {
-          "identified": true/false,
-          "confidence": 1-10,
-          "medicineType": "pill/tablet/capsule/cream/ointment/syrup/injection/inhaler/drops/other",
+          "identified": true,
+          "confidence": 7,
+          "medicineType": "tablet",
           "medicineName": {
-            "brandName": "brand/trade name visible on packaging or product",
-            "genericName": "generic/chemical name if identifiable",
-            "primaryName": "the most prominent medicine name"
+            "brandName": "Brand Name Here",
+            "genericName": "Generic Name Here",
+            "primaryName": "Primary Name Here"
           },
           "physicalCharacteristics": {
-            "form": "tablet/capsule/cream/syrup/etc",
-            "shape": "shape description if applicable",
-            "color": "detailed color description",
-            "size": "approximate size or volume",
-            "packaging": "tube/bottle/blister pack/box/etc",
-            "visibleText": "all text visible on medicine or packaging",
-            "imprint": "any imprints, logos, or markings",
-            "appearance": "overall appearance description"
+            "form": "tablet/capsule/cream/syrup",
+            "shape": "round/oval/rectangular",
+            "color": "white/blue/etc",
+            "size": "small/medium/large",
+            "packaging": "blister/bottle/tube",
+            "imprint": "any markings"
           },
           "dosageInformation": {
-            "strength": "dosage strength if visible (e.g., 500mg, 10ml, 2.5%)",
-            "form": "tablet/capsule/cream/liquid/etc",
-            "quantity": "quantity in package if visible"
+            "strength": "500mg",
+            "form": "tablet",
+            "quantity": "10 tablets"
           },
-          "possibleMatches": [
-            {
-              "name": "medicine name",
-              "strength": "dosage strength",
-              "manufacturer": "manufacturer if identifiable",
-              "matchConfidence": 1-10,
-              "reason": "why this is a possible match"
-            }
-          ],
-          "activeIngredients": ["list of active ingredients if visible or identifiable"],
-          "commonUses": ["common medical uses based on identification"],
-          "administrationRoute": "oral/topical/injection/inhalation/etc",
-          "safetyWarning": "important safety information or warnings",
-          "storageInstructions": "storage instructions if visible",
-          "expiryInfo": "expiry date if visible",
-          "manufacturerInfo": "manufacturer name and details if visible",
-          "verificationNeeded": true/false,
-          "reasoning": "detailed explanation of identification process and confidence level"
+          "activeIngredients": ["ingredient1", "ingredient2"],
+          "commonUses": ["use1", "use2", "use3"],
+          "administrationRoute": "oral",
+          "safetyWarning": "Do not exceed recommended dose",
+          "storageInstructions": "Store below 25°C",
+          "expiryInfo": "Check packaging",
+          "manufacturerInfo": "Manufacturer name",
+          "verificationNeeded": true,
+          "reasoning": "Identified based on visible text",
+          "sideEffects": {
+            "common": ["headache", "nausea", "dizziness"],
+            "serious": ["allergic reaction", "difficulty breathing"]
+          },
+          "drugInteractions": ["alcohol", "blood thinners"],
+          "howToTake": {
+            "withFood": "Can be taken with or without food",
+            "timeOfDay": "As prescribed",
+            "instructions": "Swallow whole with water"
+          },
+          "pregnancySafety": {
+            "category": "Consult Doctor",
+            "breastfeeding": "Consult Doctor"
+          },
+          "ageRestrictions": {
+            "pediatric": "Consult pediatrician for children",
+            "elderly": "Use with caution"
+          },
+          "prescriptionRequired": false,
+          "priceInfo": {
+            "mrp": null,
+            "priceRange": "₹50-200"
+          },
+          "foodAlcoholInteractions": {
+            "food": [],
+            "alcohol": "Avoid"
+          }
         }
 
-        CRITICAL INSTRUCTIONS:
-        1. Carefully examine ALL visible text, logos, markings, and packaging
-        2. Read medicine name from packaging, labels, or product itself
-        3. Identify medicine type (pill, cream, syrup, etc.)
-        4. Extract dosage strength if visible (mg, ml, %, etc.)
-        5. Note manufacturer name if visible
-        6. Provide confidence score based on clarity of visible information
-        7. List multiple possible matches if uncertain
-        8. Always include safety warnings
-        9. Set verificationNeeded to true if identification is uncertain
-        10. DO NOT make definitive claims if information is unclear
-        11. Focus on VISIBLE text and information on the product/packaging
-
-        EXAMPLES OF WHAT TO LOOK FOR:
-        - Medicine name on packaging or tube
-        - Strength/dosage (500mg, 10ml, 2.5%, etc.)
-        - Manufacturer logo or name
-        - Batch number, expiry date
-        - Usage instructions
-        - Active ingredients list
-        - "For external use only" or similar warnings
-
-        SAFETY NOTICE: This is an AI-assisted identification tool. Always verify with a licensed pharmacist or healthcare provider before using any medication.
+        RULES:
+        1. Read ALL text visible on medicine/packaging
+        2. If you can identify the medicine, set identified=true and provide real info
+        3. If you cannot identify, still fill all fields with best guesses based on appearance
+        4. For price: Use null for mrp unless you know exact price
+        5. Return ONLY the JSON, nothing else
       `;
 
       // Generate content with image and prompt
-      console.log('[INFO]🤖 Sending pill identification request to Gemini...');
-      const result = await this.model.generateContent([prompt, imageData]);
-      const response = await result.response;
-      const text = response.text();
-      console.log('[INFO] Received pill identification response from Gemini');
+      console.log('[INFO]🤖 Sending pill identification request to NVIDIA...');
+      let text = '';
+      try {
+        const base64Data = imagePath.startsWith('data:') 
+          ? imagePath.split(',')[1] 
+          : (await fs.readFile(imagePath)).toString('base64');
+        const mimeType = imagePath.startsWith('data:') 
+          ? imagePath.split(';')[0].split(':')[1] 
+          : this.getMimeType(imagePath);
+
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 4096,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        console.log('[INFO] Received pill identification response from NVIDIA');
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA vision failed, falling back to Gemini:', nvidiaError.message);
+        console.log('[INFO]🤖 Sending pill identification request to Gemini...');
+        const result = await this.model.generateContent([prompt, imageData]);
+        const response = await result.response;
+        text = response.text();
+        console.log('[INFO] Received pill identification response from Gemini');
+      }
 
       // Parse JSON response
-      let pillData;
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          pillData = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('No JSON found in response');
-        }
-      } catch (parseError) {
-        console.warn('[WARN] Failed to parse JSON response, creating fallback...');
-        pillData = {
-          identified: false,
-          confidence: 1,
-          medicineName: {
-            brandName: null,
-            genericName: null,
-            primaryName: "Unable to identify"
-          },
-          physicalCharacteristics: {
-            shape: "Unable to determine",
-            color: "Unable to determine",
-            size: "Unable to determine",
-            imprint: "Not visible",
-            scoring: "Unable to determine",
-            coating: "Unable to determine"
-          },
-          possibleMatches: [],
-          activeIngredients: [],
-          commonUses: [],
-          safetyWarning: "Unable to identify pill. Please consult a pharmacist or healthcare provider.",
-          verificationNeeded: true,
-          reasoning: "Failed to parse AI response. Manual verification required."
-        };
-      }
+      const pillData = this._extractJson(text, {
+        identified: false,
+        confidence: 1,
+        medicineName: {
+          brandName: null,
+          genericName: null,
+          primaryName: "Unable to identify"
+        },
+        physicalCharacteristics: {
+          shape: "Unable to determine",
+          color: "Unable to determine",
+          size: "Unable to determine",
+          imprint: "Not visible",
+          scoring: "Unable to determine",
+          coating: "Unable to determine"
+        },
+        possibleMatches: [],
+        activeIngredients: [],
+        commonUses: [],
+        safetyWarning: "Unable to identify pill. Please consult a pharmacist or healthcare provider.",
+        verificationNeeded: true,
+        reasoning: "Failed to parse AI response. Manual verification required."
+      });
 
       console.log('[SUCCESS] Pill identification completed');
 
@@ -1520,109 +2253,148 @@ class GeminiService {
 
       // Enhanced prompt for multiple images
       const prompt = `
-        You are a pharmaceutical expert specializing in medicine identification. Analyze these ${imagePaths.length} medicine images carefully.
-        Multiple images provide different angles and views of the same medicine product.
+        You are a pharmaceutical expert. Analyze these ${imagePaths.length} medicine images and identify the medicine.
+        Look for: medicine name, brand, strength, manufacturer, ingredients on packaging/label.
 
-        Provide a JSON response with this EXACT structure (same as single image, but with higher confidence due to multiple views):
+        IMPORTANT: You MUST return ALL fields in the JSON below. Do not skip any fields.
+
+        Return this EXACT JSON structure:
         {
-          "identified": true/false,
-          "confidence": 1-10,
-          "medicineType": "pill/tablet/capsule/cream/ointment/syrup/injection/inhaler/drops/other",
+          "identified": true,
+          "confidence": 7,
+          "medicineType": "tablet",
           "medicineName": {
-            "brandName": "brand/trade name visible on packaging or product",
-            "genericName": "generic/chemical name if identifiable",
-            "primaryName": "the most prominent medicine name"
+            "brandName": "Brand Name Here",
+            "genericName": "Generic Name Here",
+            "primaryName": "Primary Name Here"
           },
           "physicalCharacteristics": {
-            "form": "tablet/capsule/cream/syrup/etc",
-            "shape": "shape description if applicable",
-            "color": "detailed color description",
-            "size": "approximate size or volume",
-            "packaging": "tube/bottle/blister pack/box/etc",
-            "visibleText": "all text visible on medicine or packaging across all images",
-            "imprint": "any imprints, logos, or markings",
-            "appearance": "overall appearance description"
+            "form": "tablet/capsule/cream/syrup",
+            "shape": "round/oval/rectangular",
+            "color": "white/blue/etc",
+            "size": "small/medium/large",
+            "packaging": "blister/bottle/tube",
+            "imprint": "any markings"
           },
           "dosageInformation": {
-            "strength": "dosage strength if visible (e.g., 500mg, 10ml, 2.5%)",
-            "form": "tablet/capsule/cream/liquid/etc",
-            "quantity": "quantity in package if visible"
+            "strength": "500mg",
+            "form": "tablet",
+            "quantity": "10 tablets"
           },
-          "possibleMatches": [],
-          "activeIngredients": ["list of active ingredients if visible or identifiable"],
-          "commonUses": ["common medical uses based on identification"],
-          "administrationRoute": "oral/topical/injection/inhalation/etc",
-          "safetyWarning": "important safety information or warnings",
-          "storageInstructions": "storage instructions if visible",
-          "expiryInfo": "expiry date if visible",
-          "manufacturerInfo": "manufacturer name and details if visible",
-          "verificationNeeded": true/false,
-          "reasoning": "detailed explanation combining information from all ${imagePaths.length} images"
+          "activeIngredients": ["ingredient1", "ingredient2"],
+          "commonUses": ["use1", "use2", "use3"],
+          "administrationRoute": "oral",
+          "safetyWarning": "Do not exceed recommended dose",
+          "storageInstructions": "Store below 25°C",
+          "expiryInfo": "Check packaging",
+          "manufacturerInfo": "Manufacturer name",
+          "verificationNeeded": true,
+          "reasoning": "Identified based on visible text",
+          "sideEffects": {
+            "common": ["headache", "nausea", "dizziness"],
+            "serious": ["allergic reaction", "difficulty breathing"]
+          },
+          "drugInteractions": ["alcohol", "blood thinners"],
+          "howToTake": {
+            "withFood": "Can be taken with or without food",
+            "timeOfDay": "As prescribed",
+            "instructions": "Swallow whole with water"
+          },
+          "pregnancySafety": {
+            "category": "Consult Doctor",
+            "breastfeeding": "Consult Doctor"
+          },
+          "ageRestrictions": {
+            "pediatric": "Consult pediatrician for children",
+            "elderly": "Use with caution"
+          },
+          "prescriptionRequired": false,
+          "priceInfo": {
+            "mrp": null,
+            "priceRange": "₹50-200"
+          },
+          "foodAlcoholInteractions": {
+            "food": [],
+            "alcohol": "Avoid"
+          }
         }
 
-        CRITICAL INSTRUCTIONS:
-        1. Analyze ALL ${imagePaths.length} images together
-        2. Combine information from different angles/views
-        3. Higher confidence due to multiple perspectives
-        4. Extract ALL visible text from any image
-        5. Cross-reference information across images
-        6. Provide comprehensive identification
-        7. Note any discrepancies between images
-        8. Focus on VISIBLE text and information
-
-        SAFETY NOTICE: This is an AI-assisted identification tool. Always verify with a licensed pharmacist or healthcare provider before using any medication.
+        RULES:
+        1. Combine info from all ${imagePaths.length} images
+        2. Read ALL text visible on medicine/packaging
+        3. If you can identify the medicine, set identified=true and provide real info
+        4. For price: Use null for mrp unless you know exact price
+        5. Return ONLY the JSON, nothing else
       `;
 
       // Generate content with all images and prompt
-      console.log(`🤖 Sending ${imagePaths.length} images to Gemini for identification...`);
-      const result = await this.model.generateContent([prompt, ...imageDataArray]);
-      const response = await result.response;
-      const text = response.text();
-      console.log(`[INFO] Received medicine identification response from Gemini (${imagePaths.length} images)`);
+      // Generate content with all images and prompt
+      console.log(`[INFO]🤖 Sending ${imagePaths.length} images to AI (NVIDIA Primary) for identification...`);
+      let text = '';
+      try {
+        const nvidiaContent = [{ type: "text", text: prompt }];
+        
+        for (const imagePath of imagePaths) {
+          const imageBuffer = await fs.readFile(imagePath);
+          const base64Data = imageBuffer.toString('base64');
+          const mimeType = this.getMimeType(imagePath);
+          nvidiaContent.push({
+            type: "image_url",
+            image_url: {
+              url: `data:${mimeType};base64,${base64Data}`,
+            },
+          });
+        }
+
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [
+            {
+              role: "user",
+              content: nvidiaContent,
+            },
+          ],
+          max_tokens: 4096,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        console.log(`[INFO] Received medicine identification response from NVIDIA (${imagePaths.length} images)`);
+      } catch (nvidiaError) {
+        console.warn(`[WARN] NVIDIA vision failed for multiple images, falling back to Gemini:`, nvidiaError.message);
+        console.log(`[INFO]🤖 Sending ${imagePaths.length} images to Gemini for identification...`);
+        const result = await this.model.generateContent([prompt, ...imageDataArray]);
+        const response = await result.response;
+        text = response.text();
+        console.log(`[INFO] Received medicine identification response from Gemini (${imagePaths.length} images)`);
+      }
 
       // Parse JSON response (same parsing logic as single image)
-      let medicineData;
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          medicineData = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('No JSON found in response');
-        }
-      } catch (parseError) {
-        console.warn('[WARN] Failed to parse JSON response, creating fallback...');
-        medicineData = {
-          identified: false,
-          confidence: 1,
-          medicineType: 'unknown',
-          medicineName: {
-            brandName: null,
-            genericName: null,
-            primaryName: "Unable to identify"
-          },
-          physicalCharacteristics: {
-            form: "Unable to determine",
-            shape: "Unable to determine",
-            color: "Unable to determine",
-            size: "Unable to determine",
-            packaging: "Unable to determine",
-            visibleText: "Not visible",
-            imprint: "Not visible",
-            appearance: "Unable to determine"
-          },
-          dosageInformation: {},
-          possibleMatches: [],
-          activeIngredients: [],
-          commonUses: [],
-          administrationRoute: "unknown",
-          storageInstructions: null,
-          expiryInfo: null,
-          manufacturerInfo: null,
-          safetyWarning: "Unable to identify medicine. Please consult a pharmacist or healthcare provider.",
-          verificationNeeded: true,
-          reasoning: "Failed to parse AI response from multiple images. Manual verification required."
-        };
-      }
+      const medicineData = this._extractJson(text, {
+        identified: false,
+        confidence: 1,
+        medicineType: 'unknown',
+        medicineName: {
+          brandName: null,
+          genericName: null,
+          primaryName: "Unable to identify"
+        },
+        physicalCharacteristics: {
+          form: "Unable to determine",
+          shape: "Unable to determine",
+          color: "Unable to determine",
+          size: "Unable to determine",
+          packaging: "Unable to determine",
+          visibleText: "Not visible",
+          imprint: "Not visible",
+          appearance: "Unable to determine"
+        },
+        dosageInformation: {},
+        possibleMatches: [],
+        activeIngredients: [],
+        commonUses: [],
+        safetyWarning: "Unable to identify medicine. Please consult a pharmacist or healthcare provider.",
+        verificationNeeded: true,
+        reasoning: "Failed to parse AI response from multiple images. Manual verification required."
+      });
 
       console.log(`[SUCCESS] Medicine identification completed using ${imagePaths.length} images`);
 
@@ -1708,17 +2480,26 @@ class GeminiService {
         Note: Provide best guess based on barcode pattern and pharmaceutical knowledge.
       `;
 
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      let data;
+      console.log(`[INFO]🤖 Requesting medicine info for barcode ${barcode} from AI (NVIDIA Primary)...`);
+      let text = '';
       try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        data = jsonMatch ? JSON.parse(jsonMatch[0]) : { identified: false, confidence: 1 };
-      } catch {
-        data = { identified: false, confidence: 1 };
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.1,
+          max_tokens: 1024,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        console.log(`[INFO] Received barcode info from NVIDIA`);
+      } catch (nvidiaError) {
+        console.warn(`[WARN] NVIDIA failed for barcode ${barcode}, falling back to Gemini:`, nvidiaError.message);
+        const result = await this.model.generateContent(prompt);
+        const response = await result.response;
+        text = response.text();
+        console.log(`[INFO] Received barcode info from Gemini`);
       }
+
+      const data = this._extractJson(text, { identified: false, confidence: 1 });
 
       return { success: true, data };
     } catch (error) {
@@ -1759,13 +2540,7 @@ class GeminiService {
       const response = await result.response;
       const text = response.text();
 
-      let data;
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        data = jsonMatch ? JSON.parse(jsonMatch[0]) : { confidence: 1 };
-      } catch {
-        data = { confidence: 1, parsedData: { type: 'text', content: qrData } };
-      }
+      const data = this._extractJson(text, { confidence: 1, parsedData: { type: 'text', content: qrData } });
 
       return { success: true, data };
     } catch (error) {
@@ -1781,7 +2556,7 @@ class GeminiService {
    */
   async extractTextFromDocument(imagePath) {
     try {
-      console.log('[INFO] Extracting text from document with Gemini Vision OCR');
+      console.log('[INFO] Extracting text from document with AI OCR (NVIDIA Primary)');
 
       const imageBuffer = await fs.readFile(imagePath);
       const mimeType = this.getMimeType(imagePath);
@@ -1814,17 +2589,41 @@ class GeminiService {
         Extract ALL visible text accurately, maintaining structure and formatting.
       `;
 
-      const result = await this.model.generateContent([prompt, imageData]);
-      const response = await result.response;
-      const text = response.text();
-
-      let data;
+      console.log('[INFO] Extracting text from document with NVIDIA Vision OCR');
+      let text = '';
       try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        data = jsonMatch ? JSON.parse(jsonMatch[0]) : { confidence: 1, extractedText: '' };
-      } catch {
-        data = { confidence: 1, extractedText: text };
+        const base64Data = imageBuffer.toString('base64');
+
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 4096,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        console.log('[INFO] Received document OCR response from NVIDIA');
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA document OCR failed, falling back to Gemini:', nvidiaError.message);
+        console.log('[INFO]🤖 Sending document OCR request to Gemini...');
+        const result = await this.model.generateContent([prompt, imageData]);
+        const response = await result.response;
+        text = response.text();
+        console.log('[INFO] Received document OCR response from Gemini');
       }
+
+      const data = this._extractJson(text, { confidence: 1, extractedText: text });
 
       return { success: true, data };
     } catch (error) {
@@ -1885,31 +2684,35 @@ class GeminiService {
         IMPORTANT: Base analysis on established pharmaceutical knowledge. Always recommend consulting healthcare providers for medication changes.
       `;
 
-      const result = await this.model.generateContent(interactionPrompt);
-      const response = await result.response;
-      const text = response.text();
+      console.log('[INFO]🤖 Requesting interaction analysis from AI (NVIDIA Primary)...');
+      let text = '';
+      try {
+        const nvidiaResult = await nvidiaService.client.chat.completions.create({
+          model: nvidiaService.model,
+          messages: [{ role: "user", content: interactionPrompt }],
+          temperature: 0.1,
+          max_tokens: 4096,
+        });
+        text = nvidiaResult.choices[0].message.content;
+        console.log('[INFO] Received interaction analysis from NVIDIA');
+      } catch (nvidiaError) {
+        console.warn('[WARN] NVIDIA failed for interaction analysis, falling back to Gemini:', nvidiaError.message);
+        const result = await this.model.generateContent(interactionPrompt);
+        const response = await result.response;
+        text = response.text();
+        console.log('[INFO] Received interaction analysis from Gemini');
+      }
 
       // Parse JSON response
-      let analysisData;
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          analysisData = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('No JSON found in response');
-        }
-      } catch (parseError) {
-        console.warn('[WARN] Failed to parse interaction analysis JSON');
-        analysisData = {
-          overallRisk: "unknown",
-          interactions: [],
-          contraindications: [],
-          generalRecommendations: ["Consult your healthcare provider about these medications"],
-          warningFlags: ["Unable to complete automated analysis"],
-          consultationRecommended: true,
-          reasoning: "Failed to parse AI analysis response"
-        };
-      }
+      const analysisData = this._extractJson(text, {
+        overallRisk: "unknown",
+        interactions: [],
+        contraindications: [],
+        generalRecommendations: ["Consult your healthcare provider about these medications"],
+        warningFlags: ["Unable to complete automated analysis"],
+        consultationRecommended: true,
+        reasoning: "Failed to parse AI analysis response"
+      });
 
       console.log('[SUCCESS] Medicine interaction analysis completed');
 
@@ -1969,6 +2772,122 @@ class GeminiService {
    */
   get isInitialized() {
     return !!this.model;
+  }
+
+  /**
+   * Smart API: Proactively check key health every 3 minutes
+   */
+  startHealthCheck() {
+    console.log('[SMART-API] Initializing 3-minute proactive health check service...');
+    setInterval(async () => {
+      for (let i = 0; i < this.sambaNovaClients.length; i++) {
+        const now = Date.now();
+        
+        // If it's disabled, we only check if it's almost time to revive it (last 5 mins of cooldown)
+        if (now < this.clientStates[i].disabledUntil - 300000) continue;
+
+        try {
+          // Send a tiny request to verify key health
+          await this.sambaNovaClients[i].chat.completions.create({
+            model: this.sambaNovaModel,
+            messages: [{ role: 'user', content: 'hi' }],
+            max_tokens: 1
+          });
+          
+          // If successful and was previously disabled, revive it
+          if (this.clientStates[i].disabledUntil > 0) {
+            console.log(`[SMART-API] Key ${i + 1} has recovered and is now ACTIVE.`);
+            this.clientStates[i].disabledUntil = 0;
+          }
+        } catch (e) {
+          if (e.status === 429) {
+            // Still rate limited or just failed, ensure it's disabled for 1 hour from now
+            this._disableKey(i, 3600000);
+          }
+        }
+      }
+    }, 180000); // 180,000ms = 3 minutes
+  }
+
+  /**
+   * Disable a key for a specific duration
+   */
+  _disableKey(index, durationMs) {
+    this.clientStates[index].disabledUntil = Date.now() + durationMs;
+    const minutes = Math.round(durationMs / 60000);
+    console.warn(`[SMART-API] 🚨 Key ${index + 1} is rate-limited. Put on cooldown for ${minutes} minutes.`);
+  }
+
+  /**
+   * Helper to get the best available SambaNova client using rotation and health tracking
+   */
+  _getAvailableSambaClient() {
+    if (!this.sambaNovaClients || this.sambaNovaClients.length === 0) {
+      console.log('[DEBUG] No SambaNova clients initialized.');
+      return null;
+    }
+
+    const now = Date.now();
+    for (let i = 0; i < this.sambaNovaClients.length; i++) {
+      const state = this.clientStates[i];
+      if (now >= state.disabledUntil) {
+        return { client: this.sambaNovaClients[i], index: i };
+      } else {
+        console.log(`[DEBUG] SambaNova Key ${i + 1} is on cooldown for another ${Math.round((state.disabledUntil - now) / 1000)}s`);
+      }
+    }
+    console.log('[DEBUG] All SambaNova clients are currently on cooldown.');
+    return null; // All clients are currently on cooldown
+  }
+
+  /**
+   * Helper to extract JSON from text with robust parsing
+   */
+  _extractJson(text, fallback = {}) {
+    try {
+      if (!text) return fallback;
+      
+      // Remove potential markdown code blocks
+      const cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      
+      // Try parsing direct text first
+      try {
+        return JSON.parse(cleanedText);
+      } catch (e) {
+        // Continue to regex extraction
+      }
+
+      // Find the first { and the last }
+      const firstBrace = cleanedText.indexOf('{');
+      const lastBrace = cleanedText.lastIndexOf('}');
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonStr = cleanedText.substring(firstBrace, lastBrace + 1);
+        try {
+          return JSON.parse(jsonStr);
+        } catch (innerError) {
+          console.warn('[WARN] Regex JSON extraction failed, attempting deep clean:', innerError.message);
+          
+          // Last ditch effort: try to clean up the string (remove trailing commas, etc)
+          const deepCleaned = jsonStr
+            .replace(/,\s*([\]}])/g, '$1') // Trailing commas
+            .replace(/(\w+):/g, '"$1":') // Unquoted keys (if any)
+            .replace(/'/g, '"'); // Single to double quotes
+            
+          try {
+            return JSON.parse(deepCleaned);
+          } catch (finalError) {
+            console.error('[ERROR] Final JSON parsing attempt failed');
+          }
+        }
+      }
+      
+      console.warn('[WARN] No valid JSON structure found in response');
+      return fallback;
+    } catch (error) {
+      console.error('[ERROR] _extractJson error:', error);
+      return fallback;
+    }
   }
 }
 

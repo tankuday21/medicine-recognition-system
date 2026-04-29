@@ -7,6 +7,7 @@ import {
   InformationCircleIcon,
   ShieldExclamationIcon
 } from '@heroicons/react/24/outline';
+import { BackButton } from '../components/ui/PremiumComponents';
 
 const DocumentResult = () => {
   const location = useLocation();
@@ -28,7 +29,7 @@ const DocumentResult = () => {
       </div>
     );
   }
-  
+
   // Handle case where pillInfo might not be loaded yet
   if (!scanResult.pillInfo) {
     return (
@@ -50,13 +51,7 @@ const DocumentResult = () => {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center space-x-3">
-            <button
-              onClick={() => navigate('/scanner')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              aria-label="Go back"
-            >
-              <ArrowLeftIcon className="h-6 w-6 text-gray-600" />
-            </button>
+            <BackButton onClick={() => navigate('/scanner')} />
             <div>
               <h1 className="text-xl font-bold text-gray-900">
                 Document Scan Result
@@ -81,11 +76,10 @@ const DocumentResult = () => {
         )}
 
         {/* Identification Status */}
-        <div className={`rounded-lg shadow-sm border p-6 ${
-          pillInfo.identified 
-            ? 'bg-green-50 border-green-200' 
-            : 'bg-yellow-50 border-yellow-200'
-        }`}>
+        <div className={`rounded-lg shadow-sm border p-6 ${pillInfo.identified
+          ? 'bg-green-50 border-green-200'
+          : 'bg-yellow-50 border-yellow-200'
+          }`}>
           <div className="flex items-start space-x-4">
             <div className="flex-shrink-0">
               {pillInfo.identified ? (
@@ -95,21 +89,18 @@ const DocumentResult = () => {
               )}
             </div>
             <div className="flex-1">
-              <h2 className={`text-2xl font-bold mb-2 ${
-                pillInfo.identified ? 'text-green-900' : 'text-yellow-900'
-              }`}>
+              <h2 className={`text-2xl font-bold mb-2 ${pillInfo.identified ? 'text-green-900' : 'text-yellow-900'
+                }`}>
                 {pillInfo.identified ? 'Pill Identified' : 'Identification Uncertain'}
               </h2>
               <div className="flex items-center space-x-4 mb-3">
                 <div>
-                  <p className={`text-sm font-medium ${
-                    pillInfo.identified ? 'text-green-800' : 'text-yellow-800'
-                  }`}>
+                  <p className={`text-sm font-medium ${pillInfo.identified ? 'text-green-800' : 'text-yellow-800'
+                    }`}>
                     Confidence Score
                   </p>
-                  <p className={`text-3xl font-bold ${
-                    pillInfo.identified ? 'text-green-900' : 'text-yellow-900'
-                  }`}>
+                  <p className={`text-3xl font-bold ${pillInfo.identified ? 'text-green-900' : 'text-yellow-900'
+                    }`}>
                     {confidence}%
                   </p>
                 </div>

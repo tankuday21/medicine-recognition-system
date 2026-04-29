@@ -1,128 +1,280 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import PropTypes from 'prop-types';
 import {
   MagnifyingGlassIcon,
-  BeakerIcon
+  XMarkIcon,
+  ClockIcon,
+  SparklesIcon,
+  ArrowRightIcon
 } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const MedicineSearch = ({ onSearch }) => {
+const MedicineSearch = ({ onSearch, isSearching = false }) => {
+  const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [recentSearches, setRecentSearches] = useState([]);
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef(null);
+  const suggestionsRef = useRef(null);
+  const debounceTimer = useRef(null);
 
-  const commonMedicines = [
-    { name: 'Lisinopril', type: 'Blood Pressure', generic: true },
-    { name: 'Metformin', type: 'Diabetes', generic: true },
-    { name: 'Atorvastatin', type: 'Cholesterol', generic: true },
-    { name: 'Amlodipine', type: 'Blood Pressure', generic: true },
-    { name: 'Omeprazole', type: 'Acid Reflux', generic: true },
-    { name: 'Lipitor', type: 'Cholesterol', generic: false },
-    { name: 'Norvasc', type: 'Blood Pressure', generic: false },
-    { name: 'Prilosec', type: 'Acid Reflux', generic: false }
-  ];
+  // Load recent searches from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('mediot_recent_price_searches');
+    if (saved) {
+      setRecentSearches(JSON.parse(saved).slice(0, 3));
+    }
+  }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!searchTerm.trim()) {
+  // Debounced autocomplete
+  const fetchSuggestions = useCallback(async (query) => {
+    if (query.length < 2) {
+      setSuggestions([]);
       return;
     }
 
-    setIsSearching(true);
     try {
-      await onSearch(searchTerm.trim());
-    } finally {
-      setIsSearching(false);
+      const response = await fetch(`/api/pharmacy/autocomplete?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      if (data.success && data.data) {
+        setSuggestions(data.data.slice(0, 5));
+        setShowSuggestions(true);
+      }
+    } catch (error) {
+      console.warn('Autocomplete error:', error);
     }
+  }, []);
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    debounceTimer.current = setTimeout(() => {
+      fetchSuggestions(value);
+    }, 300);
   };
 
-  const handleQuickSearch = (medicineName) => {
-    setSearchTerm(medicineName);
-    onSearch(medicineName);
+  const handleSubmit = async (e) => {
+    e?.preventDefault();
+    if (!searchTerm.trim() || isSearching) return;
+
+    setShowSuggestions(false);
+    setIsFocused(false);
+
+    // Save to recent searches
+    const updated = [searchTerm.trim(), ...recentSearches.filter(s => s !== searchTerm.trim())].slice(0, 3);
+    setRecentSearches(updated);
+    localStorage.setItem('mediot_recent_price_searches', JSON.stringify(updated));
+
+    await onSearch(searchTerm.trim());
   };
+
+  const handleSuggestionClick = (suggestion) => {
+    setSearchTerm(suggestion);
+    setShowSuggestions(false);
+    setIsFocused(false);
+
+    const updated = [suggestion, ...recentSearches.filter(s => s !== suggestion)].slice(0, 3);
+    setRecentSearches(updated);
+    localStorage.setItem('mediot_recent_price_searches', JSON.stringify(updated));
+
+    onSearch(suggestion);
+  };
+
+  const handleClear = () => {
+    setSearchTerm('');
+    setSuggestions([]);
+    setShowSuggestions(false);
+    inputRef.current?.focus();
+  };
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+        setIsFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Popular medicines for quick search
+  const popularMedicines = ['Paracetamol', 'Ibuprofen', 'Amoxicillin'];
 
   return (
-    <div>
-      {/* Search Form */}
-      <form onSubmit={handleSubmit} className="mb-6">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"
-            placeholder="Enter medicine name (e.g., Lisinopril, Metformin)"
+    <div className="relative z-[60]">
+      {/* Search Bar Overlay Background */}
+      <AnimatePresence>
+        {isFocused && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[55]"
+            onClick={() => setIsFocused(false)}
           />
-        </div>
-        
-        <button
-          type="submit"
-          disabled={isSearching || !searchTerm.trim()}
-          className="w-full mt-3 py-3 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isSearching ? (
-            <div className="flex items-center justify-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Searching...</span>
+        )}
+      </AnimatePresence>
+
+      <div className={`relative transition-all duration-500 ease-out z-[60] ${isFocused ? '-translate-y-2' : ''}`}>
+        <form onSubmit={handleSubmit} className="relative" ref={suggestionsRef}>
+          <div className={`
+            relative bg-white dark:bg-slate-900 rounded-[1.75rem] transition-all duration-300
+            ${isFocused 
+              ? 'shadow-2xl shadow-primary-500/20 scale-[1.02]' 
+              : 'shadow-lg shadow-black/5'
+            }
+          `}>
+            <div className="flex items-center">
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchTerm}
+                onChange={handleInputChange}
+                onFocus={() => { 
+                  setIsFocused(true); 
+                  setShowSuggestions(true);
+                }}
+                className="flex-1 py-4 pl-6 pr-2 bg-transparent text-slate-900 dark:text-white font-bold placeholder-slate-400 text-[15px]"
+                style={{ 
+                  outline: 'none', 
+                  border: 'none', 
+                  boxShadow: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  appearance: 'none'
+                }}
+                placeholder={t('price.searchPlaceholder')}
+                autoComplete="off"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="p-2 mr-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={isSearching || !searchTerm.trim()}
+                className="mr-2 w-10 h-10 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-primary-500/25 transition-all active:scale-90 flex-shrink-0"
+              >
+                {isSearching ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <MagnifyingGlassIcon className="w-5 h-5 stroke-[2.5]" />
+                )}
+              </button>
             </div>
-          ) : (
-            'Search Prices'
-          )}
-        </button>
-      </form>
+          </div>
 
-      {/* Quick Search Options */}
-      <div>
-        <h3 className="font-medium text-gray-900 mb-3">Popular Medicines</h3>
-        <div className="space-y-2">
-          {commonMedicines.map((medicine, index) => (
-            <button
-              key={index}
-              onClick={() => handleQuickSearch(medicine.name)}
-              className="w-full p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 focus:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <BeakerIcon className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="font-medium text-gray-900">{medicine.name}</p>
-                    <p className="text-sm text-gray-600">{medicine.type}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {medicine.generic && (
-                    <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                      Generic
-                    </span>
+          {/* Combined Suggestions Dropdown */}
+          <AnimatePresence>
+            {isFocused && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                className="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl shadow-black/20 border border-slate-100 dark:border-slate-800 overflow-hidden z-[70]"
+              >
+                <div className="p-3 space-y-4">
+                  {/* Real-time Suggestions (Only if typing) */}
+                  {searchTerm.length >= 2 && suggestions.length > 0 && (
+                    <div>
+                      <p className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                        {t('price.resultsFor', { query: searchTerm })}
+                      </p>
+                      <div className="space-y-1">
+                        {suggestions.map((suggestion, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleSuggestionClick(suggestion)}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-primary-50 dark:hover:bg-primary-950/20 rounded-xl transition-colors text-left group"
+                          >
+                            <div className="w-8 h-8 bg-primary-50 dark:bg-primary-950/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <SparklesIcon className="w-4 h-4 text-primary-500" />
+                            </div>
+                            <span className="text-sm font-bold text-slate-900 dark:text-white flex-1 truncate capitalize">
+                              {suggestion}
+                            </span>
+                            <ArrowRightIcon className="w-4 h-4 text-slate-300 group-hover:text-primary-500 transition-colors" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                  <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
 
-      {/* Search Tips */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h4 className="font-medium text-blue-900 mb-2">Search Tips:</h4>
-        <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-          <li>Try both generic and brand names (e.g., "Lisinopril" or "Prinivil")</li>
-          <li>Use partial names if you're not sure of the exact spelling</li>
-          <li>Common medicines are more likely to have price data</li>
-          <li>Enable location for distance-based results</li>
-        </ul>
+                  {/* History & Popular (If not typing or no suggestions) */}
+                  {searchTerm.length < 2 && (
+                    <div className="space-y-4">
+                      {/* Recent Searches */}
+                      {recentSearches.length > 0 && (
+                        <div>
+                          <p className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            {t('price.recentSearches')}
+                          </p>
+                          <div className="flex flex-wrap gap-2 px-3">
+                            {recentSearches.map((search, idx) => (
+                              <button
+                                key={idx}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => handleSuggestionClick(search)}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-primary-950/30 hover:border-primary-200 transition-all"
+                              >
+                                <ClockIcon className="w-3.5 h-3.5" />
+                                <span className="truncate max-w-[100px]">{search}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Popular Medicines */}
+                      <div>
+                        <p className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          {t('price.popular')}
+                        </p>
+                        <div className="flex flex-wrap gap-2 px-3 pb-2">
+                          {popularMedicines.map((medicine, idx) => (
+                            <button
+                              key={idx}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleSuggestionClick(medicine)}
+                              className="px-3 py-2 bg-primary-50 dark:bg-primary-950/20 border border-primary-100 dark:border-primary-900/30 rounded-xl text-xs font-bold text-primary-700 dark:text-primary-400 hover:bg-primary-100 transition-all"
+                            >
+                              {medicine}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </form>
       </div>
     </div>
   );
 };
 
 MedicineSearch.propTypes = {
-  onSearch: PropTypes.func.isRequired
+  onSearch: PropTypes.func.isRequired,
+  isSearching: PropTypes.bool
 };
 
 export default MedicineSearch;

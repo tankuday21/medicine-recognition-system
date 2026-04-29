@@ -129,6 +129,23 @@ router.get('/services', async (req, res) => {
   }
 });
 
+// Autocomplete drug names
+router.get('/autocomplete', async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim().length < 2) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const result = await pharmacyService.autocompleteDrug(q.trim());
+    res.json(result);
+  } catch (error) {
+    console.error('Drug autocomplete error:', error);
+    res.json({ success: true, data: [] });
+  }
+});
+
 // Get service status
 router.get('/status', async (req, res) => {
   try {

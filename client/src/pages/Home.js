@@ -1,9 +1,9 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
+import { useLanguage } from '../contexts/LanguageContext';
+import { usePWA } from '../hooks/usePWA';
 import {
   CameraIcon,
   ChatBubbleLeftRightIcon,
@@ -13,286 +13,329 @@ import {
   ExclamationTriangleIcon,
   CurrencyDollarIcon,
   NewspaperIcon,
+  SparklesIcon,
+  ChevronRightIcon,
+  ShieldCheckIcon,
+  ArrowDownTrayIcon,
   UserCircleIcon,
-  HandRaisedIcon,
-  BoltIcon,
-  BuildingOffice2Icon
+  LightBulbIcon
 } from '@heroicons/react/24/outline';
+
+// Premium Components
+import {
+  GlassCard,
+  SectionHeader,
+  AnimatedList,
+  AnimatedListItem
+} from '../components/ui/PremiumComponents';
+
+// Import images
+import hero3d from '../assets/images/hero-3d.png';
+import medicalHeroIcon from '../assets/images/medical_hero_icon.png';
+import pill3d from '../assets/images/3d-pill-bottle.png';
+import chat3d from '../assets/images/3d-chat-bot.png';
+import bell3d from '../assets/images/3d-bell.png';
+import heart3d from '../assets/images/3d-heart-shield.png';
+
+
+console.log('PremiumComponents Imports:', { GlassCard, SectionHeader, AnimatedList, AnimatedListItem });
 
 const Home = () => {
   const { user, isAuthenticated } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useLanguage();
+  const { isInstallable, installApp } = usePWA();
   const navigate = useNavigate();
 
-  const features = [
+  // Quick actions for the grid
+  const quickActions = [
     {
-      title: t('scanner.title'),
-      description: t('scanner.description'),
+      id: 'scanner',
+      title: t('scanner.scanMedicine'),
+      subtitle: t('scanner.analyzing'),
       icon: CameraIcon,
+      image: pill3d,
       path: '/scanner',
-      color: 'bg-blue-500'
+      gradient: 'from-blue-500 to-cyan-500',
+      bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+      iconColor: 'text-blue-600 dark:text-blue-400'
     },
     {
-      title: t('chat.title'),
-      description: t('chat.description'),
+      id: 'chat',
+      title: t('nav.aiAssistant'),
+      subtitle: t('chat.howCanIHelp'),
       icon: ChatBubbleLeftRightIcon,
+      image: chat3d,
       path: '/chat',
-      color: 'bg-green-500'
+      gradient: 'from-violet-500 to-purple-500',
+      bgColor: 'bg-violet-50 dark:bg-violet-900/20',
+      iconColor: 'text-violet-600 dark:text-violet-400'
     },
     {
+      id: 'reminders',
       title: t('reminders.title'),
-      description: t('reminders.description'),
+      subtitle: t('reminders.addReminder'),
       icon: ClockIcon,
+      image: bell3d,
       path: '/reminders',
-      color: 'bg-purple-500'
+      gradient: 'from-amber-500 to-orange-500',
+      bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+      iconColor: 'text-amber-600 dark:text-amber-400'
     },
     {
+      id: 'symptoms',
       title: t('symptoms.title'),
-      description: t('symptoms.description'),
+      subtitle: t('symptoms.selectSymptoms'),
       icon: HeartIcon,
+      image: heart3d,
       path: '/symptoms',
-      color: 'bg-red-500'
-    },
-    {
-      title: t('reports.title'),
-      description: t('reports.description'),
-      icon: DocumentTextIcon,
-      path: '/reports',
-      color: 'bg-indigo-500'
-    },
-    {
-      title: t('sos.title'),
-      description: t('sos.description'),
-      icon: ExclamationTriangleIcon,
-      path: '/sos',
-      color: 'bg-red-600'
-    },
-    {
-      title: t('priceLookup.title'),
-      description: t('priceLookup.description'),
-      icon: CurrencyDollarIcon,
-      path: '/price-lookup',
-      color: 'bg-yellow-500'
-    },
-    {
-      title: t('news.title'),
-      description: t('news.description'),
-      icon: NewspaperIcon,
-      path: '/news',
-      color: 'bg-gray-600'
+      gradient: 'from-rose-500 to-pink-500',
+      bgColor: 'bg-rose-50 dark:bg-rose-900/20',
+      iconColor: 'text-rose-600 dark:text-rose-400'
     }
   ];
 
+  // More services
+  const moreServices = [
+    { id: 'reports', title: t('nav.reports'), icon: DocumentTextIcon, path: '/reports', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20' },
+    { id: 'price', title: t('nav.priceLookup'), icon: CurrencyDollarIcon, path: '/price-lookup', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+    { id: 'news', title: t('nav.healthNews'), icon: NewspaperIcon, path: '/news', color: 'text-slate-500', bg: 'bg-slate-50 dark:bg-slate-800' },
+    { id: 'sos', title: t('nav.emergencySOS'), icon: ExclamationTriangleIcon, path: '/sos', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-purple-700">
-        <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:20px_20px]"></div>
-        <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 md:py-16 lg:py-20 max-w-7xl">
-          <div className="text-center">
-            {isAuthenticated && user?.name ? (
-              <>
-                <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                  <HandRaisedIcon className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 text-yellow-300 animate-bounce" />
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white">
-                    Welcome back, {user.name}!
-                  </h1>
-                </div>
-                <p className="text-base sm:text-lg md:text-xl text-blue-100 mb-6 sm:mb-8 max-w-3xl mx-auto px-4">
-                  Your health journey continues here
-                </p>
-              </>
+    <div className="pb-24">
+      {/* Premium Header with Logo Animation */}
+      <div className="px-6 pt-8 pb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="w-20 aspect-video rounded-xl overflow-hidden shadow-lg border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900"
+            >
+              <video autoPlay muted playsInline loop className="w-full h-full object-contain">
+                <source src="/videos/logo_animation.mp4" type="video/mp4" />
+              </video>
+            </motion.div>
+            <div>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] font-bold uppercase tracking-widest mb-0.5">
+                {isAuthenticated ? t('common.personalDashboard') : t('common.welcomeTo')}
+              </p>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white font-display leading-none">
+                {isAuthenticated ? (user?.name?.split(' ')[0] || 'User') : 'Mediot'} <span className="text-primary-500">.</span>
+              </h1>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/profile')}
+            className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-900 shadow-premium border border-gray-100 dark:border-slate-800 flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
+          >
+            {user?.photoURL ? (
+              <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-2xl object-cover" />
             ) : (
-              <>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-4 sm:mb-6 px-4">
-                  Your Digital Health
-                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-300">
-                    Companion
-                  </span>
-                </h1>
-                <p className="text-sm sm:text-base md:text-lg lg:text-xl text-blue-100 mb-6 sm:mb-8 max-w-3xl mx-auto px-4">
-                  AI-powered medicine identification, health tracking, and personalized care - all in one place
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center px-4">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={() => navigate('/register')}
-                    className="w-full sm:w-auto bg-white text-blue-600 hover:bg-blue-50 px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold shadow-xl"
-                  >
-                    Get Started Free
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    onClick={() => navigate('/scanner')}
-                    className="w-full sm:w-auto border-2 border-white text-white hover:bg-white/10 px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold"
-                  >
-                    Try Scanner Now
-                  </Button>
-                </div>
-              </>
+              <UserCircleIcon className="w-7 h-7 text-slate-400" />
             )}
-          </div>
+          </button>
         </div>
-        <div className="absolute bottom-0 left-0 right-0 h-8 sm:h-12 md:h-16 bg-gradient-to-t from-blue-50 to-transparent"></div>
+
+        {/* Beautiful Animated Underline */}
+        <div className="mt-5 relative w-full h-px">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-800 to-transparent" />
+          <motion.div 
+            initial={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: 1, opacity: 1 }}
+            transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-primary-500 to-transparent opacity-40 blur-[1px]" 
+          />
+        </div>
       </div>
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
-
-        {/* Quick Actions */}
-        {isAuthenticated && (
-          <div className="py-6 sm:py-8 md:py-12 -mt-4 sm:-mt-6 md:-mt-8">
-            <div className="flex items-center mb-4 sm:mb-6 md:mb-8">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 bg-yellow-100 rounded-lg">
-                  <BoltIcon className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-yellow-600" />
-                </div>
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
-                  Quick Actions
-                </h2>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
-              <Card
-                variant="medical"
-                hoverable
-                pressable
-                onClick={() => navigate('/scanner')}
-                className="cursor-pointer transform transition-all duration-300 md:hover:scale-105 hover:shadow-xl"
+      {/* Responsive Clean Hero Section */}
+      <div className="px-4 mb-8">
+        <motion.div 
+          whileHover={{ y: -3 }}
+          className="relative overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-premium group flex items-center"
+        >
+          <div className="relative w-full py-6 px-5 sm:py-8 sm:px-8 flex flex-row items-center justify-between z-10 gap-4 sm:gap-8">
+            <div className="flex-1 text-left w-full">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="inline-flex items-center px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[9px] sm:text-[11px] font-bold uppercase tracking-wider bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 mb-3 sm:mb-5 border border-primary-100 dark:border-primary-500/20"
               >
-                <div className="p-3 sm:p-4 md:p-6">
-                  <div className="flex items-center space-x-3 sm:space-x-4 md:space-x-5">
-                    <div className="flex-shrink-0 p-2.5 sm:p-3 md:p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg">
-                      <CameraIcon className="h-6 w-6 sm:h-7 sm:w-7 md:h-9 md:w-9 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 mb-0.5 sm:mb-1 md:mb-2">
-                        {t('scanner.title')}
-                      </h3>
-                      <p className="text-xs sm:text-sm md:text-base text-gray-600 line-clamp-2">
-                        Scan and identify medications instantly with AI
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Card>
+                <SparklesIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1" />
+                {t('common.aiPowered')}
+              </motion.div>
               
-              <Card
-                variant="medical"
-                hoverable
-                pressable
-                borderAccent="danger"
-                onClick={() => navigate('/sos')}
-                className="cursor-pointer bg-gradient-to-br from-red-50 to-pink-50 transform transition-all duration-300 md:hover:scale-105 hover:shadow-xl"
-              >
-                <div className="p-3 sm:p-4 md:p-6">
-                  <div className="flex items-center space-x-3 sm:space-x-4 md:space-x-5">
-                    <div className="flex-shrink-0 p-2.5 sm:p-3 md:p-4 bg-gradient-to-br from-red-500 to-red-600 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg">
-                      <ExclamationTriangleIcon className="h-6 w-6 sm:h-7 sm:w-7 md:h-9 md:w-9 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-red-900 mb-0.5 sm:mb-1 md:mb-2">
-                        {t('sos.title')}
-                      </h3>
-                      <p className="text-xs sm:text-sm md:text-base text-red-700 line-clamp-2">
-                        {t('sos.description')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
-        )}
-
-        {/* Features Grid */}
-        <div className="py-8 sm:py-12 md:py-16">
-          <div className="text-center mb-6 sm:mb-8 md:mb-12">
-            <div className="inline-flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
-              <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
-                <BuildingOffice2Icon className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 text-blue-600" />
-              </div>
-              <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900">
-                All Features
+              <h2 className="text-slate-900 dark:text-white text-xl sm:text-4xl font-black mb-2 sm:mb-4 leading-tight font-display max-w-[180px] sm:max-w-[300px]">
+                {t('home.heroTitle')}
               </h2>
+              
+              <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mb-4 sm:mb-6 font-medium max-w-[170px] sm:max-w-[280px] line-clamp-2 sm:line-clamp-none leading-relaxed">
+                {t('home.heroDescription')}
+              </p>
+              
             </div>
-            <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-2xl mx-auto px-4">
-              Comprehensive healthcare tools designed to keep you healthy and informed
-            </p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-            {features.map((feature) => (
-              <Card
-                key={feature.path}
-                variant="elevated"
-                hoverable
-                pressable
-                onClick={() => navigate(feature.path)}
-                className="cursor-pointer group transform transition-all duration-300 md:hover:scale-105 hover:shadow-lg"
+
+            {/* Visual Element without gradient */}
+            <div className="w-28 h-28 sm:w-56 sm:h-56 relative flex-shrink-0">
+              <div className="absolute inset-0 bg-primary-50 dark:bg-slate-800 rounded-full" />
+              <motion.div
+                animate={{ y: [0, -5, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                className="w-full h-full relative z-10 p-3 sm:p-4"
               >
-                <div className="p-3 sm:p-4 md:p-6 flex flex-col h-full">
-                  <div className={`${feature.color} p-2 sm:p-2.5 md:p-3 lg:p-4 rounded-lg sm:rounded-xl md:rounded-2xl w-fit mb-2 sm:mb-3 md:mb-4 lg:mb-5 group-hover:scale-110 transition-transform duration-300 shadow-md sm:shadow-lg`}>
-                    <feature.icon className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 lg:h-8 lg:w-8 text-white" />
-                  </div>
-                  <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-gray-900 mb-1 sm:mb-2 md:mb-3 line-clamp-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-xs sm:text-sm md:text-sm text-gray-600 leading-relaxed flex-grow line-clamp-2 sm:line-clamp-3">
-                    {feature.description}
-                  </p>
-                </div>
-              </Card>
-            ))}
+                <img 
+                  src={medicalHeroIcon} 
+                  alt="Hero Visual" 
+                  className="w-full h-full object-contain drop-shadow-xl sm:drop-shadow-2xl rounded-full"
+                />
+              </motion.div>
+            </div>
           </div>
+        </motion.div>
+      </div>
+
+      {/* PWA Install Prompt */}
+      {isInstallable && (
+        <div className="px-4 mb-6">
+          <GlassCard
+            className="bg-gradient-to-r from-indigo-500 to-purple-500 !border-0 text-white overflow-hidden relative"
+            onClick={installApp}
+            padding="p-0"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-xl" />
+            <div className="p-4 flex items-center gap-4 relative z-10">
+              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/10">
+                <ArrowDownTrayIcon className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-lg font-display">{t('pwa.installApp')}</h3>
+                <p className="text-white/80 text-sm">{t('pwa.getFullExperience')}</p>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                <ChevronRightIcon className="w-5 h-5 text-white" />
+              </div>
+            </div>
+          </GlassCard>
+        </div>
+      )}
+
+      {/* Quick Actions Grid */}
+      <div className="px-4 mb-6">
+        <SectionHeader title={t('dashboard.quickActions')} className="!mb-3 !px-1" />
+        <div className="grid grid-cols-2 gap-3">
+          {quickActions.map((action, index) => (
+            <GlassCard
+              key={action.id}
+              className="relative overflow-hidden !p-3.5 flex flex-col items-start justify-between min-h-[130px] group border-0 shadow-premium hover:shadow-premium-lg"
+              onClick={() => navigate(action.path)}
+              delay={index * 0.1}
+            >
+              {/* Background Gradient Blob */}
+              <div className={`absolute -top-10 -right-10 w-28 h-28 bg-gradient-to-br ${action.gradient} opacity-[0.08] rounded-full blur-2xl group-hover:opacity-[0.15] transition-opacity duration-500`} />
+
+              <div className="w-full flex justify-between items-start mb-2 relative z-10">
+                <img
+                  src={action.image}
+                  alt={action.title}
+                  className="w-16 h-16 object-contain drop-shadow-md rounded-2xl transition-transform duration-300 group-hover:scale-110"
+                />
+              </div>
+
+              <div className="relative z-10 w-full">
+                <h3 className="font-bold text-gray-900 dark:text-white mb-0.5 font-display leading-tight text-base">
+                  {action.title}
+                </h3>
+              </div>
+            </GlassCard>
+          ))}
+        </div>
+      </div>
+
+      {/* Daily Tip */}
+      <div className="px-4 mb-8">
+        <GlassCard
+          className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-emerald-100 dark:border-emerald-800/50"
+          onClick={() => navigate('/news')}
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
+              <LightBulbIcon className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-emerald-900 dark:text-emerald-100 mb-1 font-display">
+                {t('dashboard.dailyTip')}
+              </h3>
+              <p className="text-sm text-emerald-700/80 dark:text-emerald-300/80 leading-relaxed font-medium">
+                <span className="block">{t('home.hydrationTip')}</span>
+                <span className="block mt-0.5">{t('home.drinkWater')}</span>
+              </p>
+            </div>
+          </div>
+        </GlassCard>
+      </div>
+
+      {/* More Services */}
+      <div className="px-4 mb-8">
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white font-display">
+            {t('common.moreTools')}
+          </h2>
         </div>
 
-        {/* Authentication Prompt */}
-        {!isAuthenticated && (
-          <div className="py-8 sm:py-12 md:py-16">
-            <Card className="border border-blue-200 sm:border-2 bg-gradient-to-br from-blue-50 to-purple-50 shadow-lg sm:shadow-xl">
-              <div className="p-4 sm:p-6 md:p-8 lg:p-12">
-                <div className="flex flex-col md:flex-row items-center gap-4 sm:gap-6 md:gap-8">
-                  <div className="flex-shrink-0">
-                    <div className="p-3 sm:p-4 md:p-5 lg:p-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl sm:rounded-3xl shadow-xl sm:shadow-2xl">
-                      <UserCircleIcon className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 lg:h-16 lg:w-16 text-white" />
+        <GlassCard className="!p-0 overflow-hidden border border-gray-100 dark:border-gray-800 shadow-premium">
+          <AnimatedList>
+            {moreServices.map((service, index) => (
+              <div key={service.id}>
+                <AnimatedListItem>
+                  <button
+                    onClick={() => navigate(service.path)}
+                    className="w-full p-4 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group"
+                  >
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${service.bg} group-hover:scale-105 duration-200`}>
+                      <service.icon className={`w-6 h-6 ${service.color}`} />
                     </div>
-                  </div>
-                  <div className="flex-1 text-center md:text-left">
-                    <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 sm:mb-3 md:mb-4">
-                      Get the Most Out of Mediot
-                    </h3>
-                    <p className="text-sm sm:text-base md:text-lg text-gray-700 mb-4 sm:mb-5 md:mb-6 leading-relaxed">
-                      Create an account to save your data, set medication reminders, track your health journey, and access personalized AI-powered features.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center md:justify-start">
-                      <Button
-                        variant="primary"
-                        size="lg"
-                        onClick={() => navigate('/register')}
-                        className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold shadow-lg hover:shadow-xl transform md:hover:scale-105 transition-all"
-                      >
-                        {t('auth.signUp')}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        onClick={() => navigate('/login')}
-                        className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold border-2 hover:bg-gray-50"
-                      >
-                        {t('auth.signIn')}
-                      </Button>
+                    <div className="flex-1 text-left">
+                      <h4 className={`font-semibold text-base ${service.id === 'sos' ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>
+                        {service.title}
+                      </h4>
                     </div>
-                  </div>
-                </div>
+                    <div className="w-8 h-8 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                    </div>
+                  </button>
+                </AnimatedListItem>
+                {index < moreServices.length - 1 && (
+                  <div className="mx-4 h-px bg-gray-100 dark:bg-gray-800" />
+                )}
               </div>
-            </Card>
-          </div>
-        )}
-        
-        {/* Footer Spacing */}
-        <div className="pb-6 sm:pb-8 md:pb-12"></div>
+            ))}
+          </AnimatedList>
+        </GlassCard>
       </div>
+
+      {/* Trust Badges */}
+      <div className="px-6 py-4 flex justify-center items-center gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500 mb-6">
+        <div className="flex flex-col items-center gap-1">
+          <ShieldCheckIcon className="w-6 h-6 text-gray-400" />
+          <span className="text-[10px] font-bold tracking-wider uppercase text-gray-400">{t('common.secure')}</span>
+        </div>
+        <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex -space-x-2">
+            <div className="w-6 h-6 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-[8px] font-bold text-blue-600">AI</div>
+            <div className="w-6 h-6 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-[8px] font-bold text-indigo-600">ML</div>
+          </div>
+          <span className="text-[10px] font-bold tracking-wider uppercase text-gray-400">{t('common.smart')}</span>
+        </div>
+        <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
+        <div className="flex flex-col items-center gap-1">
+          <HeartIcon className="w-6 h-6 text-gray-400" />
+          <span className="text-[10px] font-bold tracking-wider uppercase text-gray-400">{t('common.trusted')}</span>
+        </div>
+      </div>
+
     </div>
   );
 };

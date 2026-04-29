@@ -3,7 +3,35 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { motion, AnimatePresence } from 'framer-motion';
 import { combineClasses, conditionalClasses } from '../../utils/design-system';
+
+// Premium Icons
+import {
+  Squares2X2Icon,
+  UsersIcon,
+  CalendarDaysIcon,
+  DocumentTextIcon,
+  BeakerIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
+  XMarkIcon,
+  ChevronRightIcon,
+  SparklesIcon,
+  ShieldCheckIcon,
+  HeartIcon,
+  ClipboardDocumentListIcon
+} from '@heroicons/react/24/outline';
+
+import {
+  Squares2X2Icon as Squares2X2Solid,
+  UsersIcon as UsersSolid,
+  CalendarDaysIcon as CalendarSolid,
+  DocumentTextIcon as DocumentSolid,
+  BeakerIcon as BeakerSolid,
+  ChartBarIcon as ChartBarSolid,
+  Cog6ToothIcon as CogSolid
+} from '@heroicons/react/24/solid';
 
 /**
  * Drawer Navigation Item Component
@@ -11,23 +39,26 @@ import { combineClasses, conditionalClasses } from '../../utils/design-system';
  */
 export const DrawerNavItem = ({
   icon,
+  activeIcon,
   label,
   badge,
   isActive = false,
   disabled = false,
   onClick,
   children,
+  gradient = 'from-primary-500 to-primary-600',
   className = '',
   ...props
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasChildren = children && React.Children.count(children) > 0;
+  const Icon = isActive && activeIcon ? activeIcon : icon;
 
   const itemClasses = combineClasses(
     'drawer-nav-item group',
-    'flex items-center w-full p-4 transition-all duration-200 ease-out',
-    'hover:bg-gray-50 active:bg-gray-100',
-    isActive ? 'bg-primary-50 text-primary-600 border-r-2 border-primary-500' : 'text-gray-700',
+    'flex items-center w-full p-3 rounded-xl transition-all duration-200 ease-out',
+    'hover:bg-gray-50 dark:hover:bg-slate-800 active:bg-gray-100 dark:active:bg-slate-700',
+    isActive ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-300',
     disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
     className
   );
@@ -45,61 +76,79 @@ export const DrawerNavItem = ({
 
   return (
     <div className="drawer-nav-item-container">
-      <button
+      <motion.button
+        whileTap={{ scale: 0.98 }}
         className={itemClasses}
         onClick={handleClick}
         disabled={disabled}
         aria-expanded={hasChildren ? isExpanded : undefined}
         {...props}
       >
-        {/* Icon */}
+        {/* Active indicator */}
+        {isActive && (
+          <motion.div
+            layoutId="drawerActiveIndicator"
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-primary-500 to-primary-600 rounded-r-full"
+          />
+        )}
+
+        {/* Icon with gradient background */}
         <div className={combineClasses(
-          'flex-shrink-0 w-6 h-6 mr-3 transition-all duration-200',
-          'group-active:scale-90',
-          isActive ? 'text-primary-600' : 'text-gray-500 group-hover:text-gray-700'
+          'flex-shrink-0 w-10 h-10 rounded-xl mr-3 flex items-center justify-center transition-all duration-200',
+          isActive 
+            ? `bg-gradient-to-br ${gradient} text-white shadow-lg` 
+            : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 group-hover:bg-gray-200 dark:group-hover:bg-slate-600'
         )}>
-          {icon}
+          {typeof Icon === 'function' ? <Icon className="w-5 h-5" /> : Icon}
         </div>
 
         {/* Label */}
         <span className={combineClasses(
           'flex-1 text-left font-medium transition-colors duration-200',
-          isActive ? 'text-primary-600' : 'text-gray-700'
+          isActive ? 'text-primary-700 dark:text-primary-300' : 'text-gray-700 dark:text-gray-300'
         )}>
           {label}
         </span>
 
         {/* Badge */}
         {badge && (
-          <div className="flex-shrink-0 ml-2 min-w-[20px] h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-2">
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="flex-shrink-0 ml-2 min-w-[24px] h-6 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-2 shadow-lg shadow-red-500/25"
+          >
             {badge}
-          </div>
+          </motion.div>
         )}
 
         {/* Expand/Collapse Icon */}
         {hasChildren && (
-          <div className={combineClasses(
-            'flex-shrink-0 ml-2 w-5 h-5 text-gray-400 transition-transform duration-200',
-            isExpanded ? 'rotate-90' : 'rotate-0'
-          )}>
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
+          <motion.div
+            animate={{ rotate: isExpanded ? 90 : 0 }}
+            transition={{ duration: 0.2 }}
+            className="flex-shrink-0 ml-2 w-5 h-5 text-gray-400"
+          >
+            <ChevronRightIcon className="w-5 h-5" />
+          </motion.div>
         )}
-      </button>
+      </motion.button>
 
       {/* Sub-items */}
-      {hasChildren && (
-        <div className={combineClasses(
-          'overflow-hidden transition-all duration-300 ease-out',
-          isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-        )}>
-          <div className="pl-9 bg-gray-50/50">
-            {children}
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {hasChildren && isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="pl-12 py-1 space-y-1">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -119,14 +168,14 @@ export const DrawerHeader = ({
   ...props
 }) => {
   const variantClasses = {
-    default: 'bg-white border-b border-gray-200',
-    medical: 'bg-gradient-to-r from-primary-500 to-primary-600 text-white',
+    default: 'bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700',
+    medical: 'bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700 text-white',
     dark: 'bg-gray-900 text-white'
   };
 
   const headerClasses = combineClasses(
     'drawer-header',
-    'flex items-center justify-between p-6',
+    'flex items-center justify-between p-5',
     variantClasses[variant],
     className
   );
@@ -136,16 +185,18 @@ export const DrawerHeader = ({
       <div className="flex items-center flex-1">
         {/* Avatar */}
         {avatar && (
-          <div className="flex-shrink-0 mr-4">
+          <div className="flex-shrink-0 mr-4 relative">
             {typeof avatar === 'string' ? (
               <img
                 src={avatar}
                 alt="User avatar"
-                className="w-10 h-10 rounded-full object-cover"
+                className="w-12 h-12 rounded-full object-cover ring-2 ring-white/30"
               />
             ) : (
               avatar
             )}
+            {/* Online indicator */}
+            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white" />
           </div>
         )}
 
@@ -153,16 +204,16 @@ export const DrawerHeader = ({
         <div className="flex-1 min-w-0">
           {title && (
             <h2 className={combineClasses(
-              'text-lg font-semibold truncate',
-              variant === 'medical' || variant === 'dark' ? 'text-white' : 'text-gray-900'
+              'text-lg font-bold truncate',
+              variant === 'medical' || variant === 'dark' ? 'text-white' : 'text-gray-900 dark:text-white'
             )}>
               {title}
             </h2>
           )}
           {subtitle && (
             <p className={combineClasses(
-              'text-sm truncate mt-1',
-              variant === 'medical' || variant === 'dark' ? 'text-white/80' : 'text-gray-500'
+              'text-sm truncate mt-0.5',
+              variant === 'medical' || variant === 'dark' ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'
             )}>
               {subtitle}
             </p>
@@ -173,19 +224,19 @@ export const DrawerHeader = ({
 
       {/* Close Button */}
       {onClose && (
-        <button
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={onClose}
           className={combineClasses(
-            'flex-shrink-0 p-2 rounded-lg transition-all duration-200',
-            'hover:bg-black/10 active:scale-90',
-            variant === 'medical' || variant === 'dark' ? 'text-white' : 'text-gray-500'
+            'flex-shrink-0 p-2 rounded-xl transition-all duration-200',
+            'hover:bg-black/10 dark:hover:bg-white/10',
+            variant === 'medical' || variant === 'dark' ? 'text-white' : 'text-gray-500 dark:text-gray-400'
           )}
           aria-label="Close navigation"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+          <XMarkIcon className="w-6 h-6" />
+        </motion.button>
       )}
     </div>
   );
@@ -446,74 +497,59 @@ export const MedicalDrawerNavigation = ({
     {
       id: 'dashboard',
       label: 'Dashboard',
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-        </svg>
-      )
+      icon: Squares2X2Icon,
+      activeIcon: Squares2X2Solid,
+      gradient: 'from-violet-500 to-purple-500'
     },
     {
       id: 'patients',
       label: 'Patients',
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-      ),
+      icon: UsersIcon,
+      activeIcon: UsersSolid,
+      gradient: 'from-blue-500 to-cyan-500',
       badge: showBadges ? '12' : null
     },
     {
       id: 'appointments',
       label: 'Appointments',
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      ),
+      icon: CalendarDaysIcon,
+      activeIcon: CalendarSolid,
+      gradient: 'from-emerald-500 to-teal-500',
       badge: showBadges ? '3' : null
     },
     {
       id: 'medical-records',
       label: 'Medical Records',
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
+      icon: DocumentTextIcon,
+      activeIcon: DocumentSolid,
+      gradient: 'from-indigo-500 to-blue-500',
       children: [
-        { id: 'lab-results', label: 'Lab Results', badge: showBadges ? '2' : null },
-        { id: 'imaging', label: 'Imaging' },
-        { id: 'prescriptions', label: 'Prescriptions' },
-        { id: 'allergies', label: 'Allergies' }
+        { id: 'lab-results', label: 'Lab Results', icon: BeakerIcon, badge: showBadges ? '2' : null },
+        { id: 'imaging', label: 'Imaging', icon: DocumentTextIcon },
+        { id: 'prescriptions', label: 'Prescriptions', icon: ClipboardDocumentListIcon },
+        { id: 'allergies', label: 'Allergies', icon: ShieldCheckIcon }
       ]
     },
     {
       id: 'medications',
       label: 'Medications',
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-        </svg>
-      )
+      icon: BeakerIcon,
+      activeIcon: BeakerSolid,
+      gradient: 'from-pink-500 to-rose-500'
     },
     {
       id: 'analytics',
       label: 'Analytics',
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      )
+      icon: ChartBarIcon,
+      activeIcon: ChartBarSolid,
+      gradient: 'from-amber-500 to-orange-500'
     },
     {
       id: 'settings',
       label: 'Settings',
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      )
+      icon: Cog6ToothIcon,
+      activeIcon: CogSolid,
+      gradient: 'from-slate-500 to-gray-500'
     }
   ];
 
@@ -529,8 +565,10 @@ export const MedicalDrawerNavigation = ({
       <DrawerNavItem
         key={item.id}
         icon={item.icon}
+        activeIcon={item.activeIcon}
         label={item.label}
         badge={item.badge}
+        gradient={item.gradient}
         isActive={activeItem === item.id}
         onClick={() => handleItemClick(item.id, item)}
       >
@@ -557,15 +595,31 @@ export const MedicalDrawerNavigation = ({
       />
 
       {/* Navigation Items */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {renderNavItems(navigationItems)}
       </div>
 
+      {/* Premium Card */}
+      <div className="p-4 border-t border-gray-200 dark:border-slate-700">
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 text-white">
+          <div className="flex items-center gap-2 mb-2">
+            <SparklesIcon className="w-5 h-5" />
+            <span className="font-semibold text-sm">Pro Features</span>
+          </div>
+          <p className="text-xs text-primary-100 mb-3">
+            Unlock advanced analytics and priority support
+          </p>
+          <button className="w-full py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
+            Upgrade Now
+          </button>
+        </div>
+      </div>
+
       {/* Footer */}
-      <DrawerFooter variant="medical">
-        <div className="flex items-center justify-between text-sm text-gray-600">
+      <DrawerFooter variant="default">
+        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
           <span>Version 2.1.0</span>
-          <button className="text-primary-600 hover:text-primary-700 font-medium">
+          <button className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium transition-colors">
             Help & Support
           </button>
         </div>
@@ -576,13 +630,15 @@ export const MedicalDrawerNavigation = ({
 
 // PropTypes
 DrawerNavItem.propTypes = {
-  icon: PropTypes.node.isRequired,
+  icon: PropTypes.oneOfType([PropTypes.node, PropTypes.elementType]).isRequired,
+  activeIcon: PropTypes.oneOfType([PropTypes.node, PropTypes.elementType]),
   label: PropTypes.string.isRequired,
   badge: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   isActive: PropTypes.bool,
   disabled: PropTypes.bool,
   onClick: PropTypes.func,
   children: PropTypes.node,
+  gradient: PropTypes.string,
   className: PropTypes.string
 };
 

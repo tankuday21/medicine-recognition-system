@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { motion, AnimatePresence } from 'framer-motion';
 import { combineClasses, conditionalClasses } from '../../utils/design-system';
 
 /**
@@ -23,11 +24,11 @@ export const BottomNavTab = ({
   const tabClasses = combineClasses(
     'nav-tab group relative',
     'flex flex-col items-center justify-center',
-    'min-w-[60px] p-2 rounded-lg transition-all duration-200 ease-out',
-    'touch-target',
+    'min-w-[64px] sm:min-w-[72px] p-2 sm:p-2.5 rounded-xl transition-all duration-200 ease-out',
+    'min-h-[56px] sm:min-h-[60px]',
     isActive 
-      ? 'text-primary-600 bg-primary-50' 
-      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+      ? 'text-primary-600 dark:text-primary-400' 
+      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300',
     disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
     className
   );
@@ -39,45 +40,69 @@ export const BottomNavTab = ({
   };
 
   return (
-    <button
+    <motion.button
+      whileTap={{ scale: 0.9 }}
       className={tabClasses}
       onClick={handleClick}
       disabled={disabled}
       aria-label={label}
       {...props}
     >
+      {/* Active background indicator */}
+      <AnimatePresence>
+        {isActive && (
+          <motion.div
+            layoutId="activeTab"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="absolute inset-1 bg-primary-50 dark:bg-primary-900/30 rounded-xl -z-10"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Icon with animation */}
-      <div className={combineClasses(
-        'relative transition-all duration-200 ease-out',
-        'group-active:scale-90',
-        isActive ? 'scale-110' : 'group-hover:scale-105'
-      )}>
+      <motion.div 
+        animate={{ scale: isActive ? 1.1 : 1 }}
+        className="relative"
+      >
         <div className="w-6 h-6 flex items-center justify-center">
           {isActive && activeIcon ? activeIcon : icon}
         </div>
         
-        {/* Badge */}
+        {/* Badge - Premium style */}
         {badge && (
-          <div className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-1">
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-gradient-to-r from-red-500 to-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-lg shadow-red-500/30"
+          >
             {badge}
-          </div>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
 
       {/* Label */}
       <span className={combineClasses(
-        'text-xs font-medium mt-1 transition-all duration-200',
+        'text-[10px] sm:text-xs font-medium mt-1 transition-all duration-200',
         'line-clamp-1 text-center',
-        isActive ? 'text-primary-600' : 'text-gray-500'
+        isActive ? 'text-primary-600 dark:text-primary-400 font-semibold' : 'text-gray-500 dark:text-gray-400'
       )}>
         {label}
       </span>
 
-      {/* Active indicator */}
-      {isActive && (
-        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-primary-500 rounded-full" />
-      )}
-    </button>
+      {/* Active dot indicator */}
+      <AnimatePresence>
+        {isActive && (
+          <motion.div 
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-primary-500 rounded-full shadow-lg shadow-primary-500/50" 
+          />
+        )}
+      </AnimatePresence>
+    </motion.button>
   );
 };
 
@@ -119,25 +144,23 @@ const BottomNavigation = ({
 
   // Variant classes
   const variantClasses = {
-    default: 'bg-white border-t border-gray-200 shadow-2xl',
-    glass: 'bg-white/80 backdrop-blur-md border-t border-white/20 shadow-2xl',
-    medical: 'bg-gradient-to-r from-primary-50 to-white border-t border-primary-200 shadow-2xl shadow-primary-500/10'
+    default: 'bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 shadow-2xl',
+    glass: 'bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-white/20 dark:border-slate-700/50 shadow-2xl',
+    medical: 'bg-gradient-to-r from-white via-primary-50/50 to-white dark:from-slate-900 dark:via-primary-900/20 dark:to-slate-900 border-t border-primary-100 dark:border-primary-800/30 shadow-2xl shadow-primary-500/5'
   };
 
   // Base navigation classes
   const navClasses = combineClasses(
-    'nav-bottom',
     'fixed bottom-0 left-0 right-0 z-50',
     'transition-all duration-300 ease-out',
-    'safe-area-bottom',
     variantClasses[variant],
     isVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0',
     className
   );
 
   return (
-    <nav className={navClasses} {...props}>
-      <div className="flex justify-around items-center px-2 py-1">
+    <nav className={navClasses} style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }} {...props}>
+      <div className="flex justify-around items-center px-2 sm:px-4 py-1 sm:py-2">
         {tabs.map((tab, index) => (
           <BottomNavTab
             key={tab.id || index}

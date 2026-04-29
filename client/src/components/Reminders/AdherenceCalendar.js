@@ -160,22 +160,22 @@ const AdherenceCalendar = ({ userId }) => {
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Adherence Calendar</h3>
-        <div className="flex items-center space-x-4">
+    <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Adherence Calendar</h3>
+        <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-4">
           <button
             onClick={() => navigateMonth(-1)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ChevronLeftIcon className="h-5 w-5 text-gray-600" />
           </button>
-          <span className="text-lg font-medium text-gray-900 min-w-[150px] text-center">
+          <span className="text-sm sm:text-lg font-medium text-gray-900 min-w-[120px] sm:min-w-[150px] text-center">
             {monthYear}
           </span>
           <button
             onClick={() => navigateMonth(1)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ChevronRightIcon className="h-5 w-5 text-gray-600" />
           </button>
@@ -183,22 +183,23 @@ const AdherenceCalendar = ({ userId }) => {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-8">
+        <div className="text-center py-6 sm:py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-500 mt-2">Loading calendar...</p>
+          <p className="text-gray-500 mt-2 text-sm sm:text-base">Loading calendar...</p>
         </div>
       ) : (
         <>
           {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1 mb-1 sm:mb-2">
             {weekDays.map(day => (
-              <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
-                {day}
+              <div key={day} className="p-1 sm:p-2 text-center text-xs sm:text-sm font-medium text-gray-500">
+                <span className="hidden sm:inline">{day}</span>
+                <span className="sm:hidden">{day.charAt(0)}</span>
               </div>
             ))}
           </div>
           
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
             {days.map((date, index) => {
               const status = getAdherenceStatus(date);
               const isToday = date && date.toDateString() === new Date().toDateString();
@@ -207,21 +208,24 @@ const AdherenceCalendar = ({ userId }) => {
                 <div
                   key={index}
                   className={`
-                    relative p-2 h-12 border rounded-lg flex items-center justify-center text-sm
+                    relative p-1 sm:p-2 h-10 sm:h-12 border rounded sm:rounded-lg flex items-center justify-center text-xs sm:text-sm
                     ${date ? getStatusColor(status) : 'bg-transparent border-transparent'}
                     ${isToday ? 'ring-2 ring-blue-500' : ''}
                   `}
                 >
                   {date && (
                     <>
-                      <span className="absolute top-1 left-1 text-xs">
+                      <span className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 text-[10px] sm:text-xs">
                         {date.getDate()}
                       </span>
-                      <div className="flex items-center justify-center">
-                        {getStatusIcon(status)}
+                      <div className="flex items-center justify-center mt-1 sm:mt-0">
+                        {status?.status === 'complete' && <CheckCircleIcon className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />}
+                        {status?.status === 'partial' && <ExclamationCircleIcon className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" />}
+                        {status?.status === 'missed' && <XCircleIcon className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />}
+                        {!status && <ClockIcon className="h-3 w-3 sm:h-4 sm:w-4 text-gray-300" />}
                       </div>
                       {status && (
-                        <span className="absolute bottom-0 right-1 text-xs font-medium">
+                        <span className="absolute bottom-0 right-0.5 sm:right-1 text-[8px] sm:text-xs font-medium hidden sm:block">
                           {status.percentage}%
                         </span>
                       )}
@@ -233,21 +237,21 @@ const AdherenceCalendar = ({ userId }) => {
           </div>
 
           {/* Legend */}
-          <div className="mt-6 flex items-center justify-center space-x-6 text-sm">
-            <div className="flex items-center space-x-2">
-              <CheckCircleIcon className="h-4 w-4 text-green-500" />
+          <div className="mt-4 sm:mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs sm:text-sm">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <CheckCircleIcon className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
               <span className="text-gray-600">Complete</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <ExclamationCircleIcon className="h-4 w-4 text-yellow-500" />
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <ExclamationCircleIcon className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" />
               <span className="text-gray-600">Partial</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <XCircleIcon className="h-4 w-4 text-red-500" />
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <XCircleIcon className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
               <span className="text-gray-600">Missed</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <ClockIcon className="h-4 w-4 text-gray-300" />
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <ClockIcon className="h-3 w-3 sm:h-4 sm:w-4 text-gray-300" />
               <span className="text-gray-600">No Data</span>
             </div>
           </div>

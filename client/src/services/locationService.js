@@ -5,26 +5,74 @@ class LocationService {
     console.log('[INFO] Location service initialized:', { supported: this.isSupported });
   }
 
-  // Get current location with high accuracy
+  // Get location via IP (Last resort fallback)
+  async getIPLocation() {
+    try {
+      console.log('[INFO] Attempting IP-based location fallback...');
+      const response = await fetch('https://ipapi.co/json/');
+      if (!response.ok) throw new Error('IP location service unavailable');
+      
+      const data = await response.json();
+      
+      const locationData = {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        accuracy: 1000, // IP location is approximate (~1km)
+        address: `${data.city}, ${data.region}, ${data.country_name}`,
+        timestamp: new Date().toISOString(),
+        isIPBased: true
+      };
+
+      this.currentLocation = locationData;
+      return { success: true, data: locationData };
+    } catch (error) {
+      console.error('IP Location error:', error);
+      return { success: false, message: 'Total location failure' };
+    }
+  }
+
+  // Get current location with high accuracy and fallback
   async getCurrentLocation(options = {}) {
     try {
       if (!this.isSupported) {
-        return {
-          success: false,
-          message: 'Geolocation is not supported by this browser'
-        };
+        return this.getIPLocation();
       }
 
       const defaultOptions = {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 300000, // 5 minutes
+        maximumAge: 300000,
         ...options
       };
 
-      console.log('[INFO] Getting current location...');
+      console.log('[INFO] Getting location (High Accuracy)...');
 
-      const position = await this.getPosition(defaultOptions);
+      let position;
+      try {
+        position = await this.getPosition(defaultOptions);
+      } catch (error) {
+        // If denied, go straight to IP location
+        if (error.code === error.PERMISSION_DENIED) {
+          console.warn('[WARN] Geolocation denied, falling back to IP location...');
+          return this.getIPLocation();
+        }
+
+        if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+          console.warn('[WARN] High accuracy location failed, falling back to standard accuracy...');
+          try {
+            position = await this.getPosition({
+              ...defaultOptions,
+              enableHighAccuracy: false,
+              timeout: 10000
+            });
+          } catch (fallbackError) {
+            console.warn('[WARN] Standard accuracy failed, falling back to IP location...');
+            return this.getIPLocation();
+          }
+        } else {
+          throw error;
+        }
+      }
       
       const locationData = {
         latitude: position.coords.latitude,
@@ -57,28 +105,7 @@ class LocationService {
 
     } catch (error) {
       console.error('Location error:', error);
-      
-      let message = 'Failed to get location';
-      
-      switch (error.code) {
-        case error.PERMISSION_DENIED:
-          message = 'Location access denied. Please enable location permissions.';
-          break;
-        case error.POSITION_UNAVAILABLE:
-          message = 'Location information is unavailable.';
-          break;
-        case error.TIMEOUT:
-          message = 'Location request timed out. Please try again.';
-          break;
-        default:
-          message = error.message || 'Unknown location error';
-      }
-
-      return {
-        success: false,
-        message,
-        error: error.code
-      };
+      return this.getIPLocation();
     }
   }
 

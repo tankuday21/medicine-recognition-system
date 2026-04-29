@@ -1,53 +1,58 @@
 const express = require('express');
 const { auth, optionalAuth } = require('../middleware/auth');
 const geminiService = require('../services/geminiService');
-
-// Function to get the appropriate AI service
-const getAIService = () => {
-  try {
-    // Check if Gemini AI is enabled and configured
-    if (process.env.ENABLE_AI_CHAT === 'true' && process.env.GEMINI_API_KEY) {
-      console.log('✅ Using Gemini AI service for chat');
-      return geminiService;
-    } else {
-      console.log('⚠️ Gemini AI not configured, using mock service');
-      return require('../services/mockAIService');
-    }
-  } catch (error) {
-    console.error('❌ Error loading AI service:', error);
-    return require('../services/mockAIService');
-  }
-};
+const ChatMessage = require('../models/ChatMessage');
+const mongoose = require('mongoose');
 
 const router = express.Router();
 
 // Send message to AI assistant
 router.post('/message', optionalAuth, async (req, res) => {
   try {
-    const { message, conversationHistory, userContext } = req.body;
+    const { message, conversationId, language } = req.body;
 
     if (!message || message.trim().length === 0) {
-      return res.status(400).json({
-        error: 'Validation error',
-        message: 'Message is required'
-      });
+      return res.status(400).json({ error: 'Validation error', message: 'Message is required' });
     }
 
     if (message.length > 2000) {
-      return res.status(400).json({
-        error: 'Validation error',
-        message: 'Message is too long (max 2000 characters)'
-      });
+      return res.status(400).json({ error: 'Validation error', message: 'Message is too long (max 2000 characters)' });
     }
 
-    console.log(`💬 Processing chat message from ${req.user ? 'authenticated' : 'anonymous'} user`);
+    // Generate or use existing conversation ID
+    const convId = conversationId || new mongoose.Types.ObjectId().toString();
+    const userId = req.user?._id;
 
-    // Build user context from profile if authenticated
-    let enhancedUserContext = userContext || {};
+    console.log(`💬 Chat from ${userId ? 'user:' + userId : 'anonymous'}, convId: ${convId}`);
+
+    // Get conversation history from database for context (last 10 messages)
+    let conversationHistory = [];
+    if (userId) {
+      try {
+        const previousMessages = await ChatMessage.find({
+          userId: new mongoose.Types.ObjectId(userId),
+          conversationId: convId
+        })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .lean();
+
+        conversationHistory = previousMessages.reverse().map(msg => ({
+          sender: msg.sender,
+          message: msg.content
+        }));
+        console.log(`📜 Loaded ${conversationHistory.length} previous messages for context`);
+      } catch (err) {
+        console.error('Error loading history:', err);
+      }
+    }
+
+    // Build user context
+    let enhancedUserContext = {};
     if (req.user) {
       enhancedUserContext = {
-        ...enhancedUserContext,
         userId: req.user._id,
+        name: req.user.name,
         age: req.user.age,
         medicalConditions: req.user.medicalConditions || [],
         currentMedications: req.user.currentMedications || [],
@@ -55,245 +60,314 @@ router.post('/message', optionalAuth, async (req, res) => {
       };
     }
 
-    // Use Gemini service for real AI chat
+    // Save user message to database FIRST
+    if (userId) {
+      try {
+        const savedUserMsg = await ChatMessage.create({
+          userId: new mongoose.Types.ObjectId(userId),
+          conversationId: convId,
+          content: message.trim(),
+          sender: 'user'
+        });
+        console.log(`✅ Saved user message: ${savedUserMsg._id}`);
+      } catch (err) {
+        console.error('Error saving user message:', err);
+      }
+    }
+
+    // Generate AI response
+    let aiResponse;
     if (process.env.ENABLE_AI_CHAT === 'true' && process.env.GEMINI_API_KEY) {
       const result = await geminiService.generateChatResponse(
         message.trim(),
-        conversationHistory || [],
-        enhancedUserContext
+        conversationHistory,
+        enhancedUserContext,
+        language
       );
 
       if (result.success) {
-        res.json({
-          success: true,
-          data: {
-            message: result.data.message,
-            followUpSuggestions: result.data.followUpSuggestions,
-            timestamp: result.data.timestamp,
-            context: result.data.context,
-            aiProvider: 'gemini'
-          }
-        });
+        aiResponse = {
+          message: result.data.message || "I'm sorry, I couldn't generate a response. Please try again.",
+          followUpSuggestions: result.data.followUpSuggestions,
+          timestamp: result.data.timestamp
+        };
       } else {
-        res.status(400).json({
-          error: 'AI processing failed',
-          message: result.error || 'Failed to generate response'
-        });
+        throw new Error(result.error || 'AI processing failed');
       }
     } else {
-      // Fallback to mock response
-      res.json({
-        success: true,
-        data: {
-          message: "I'm currently in demo mode. To enable real AI conversations, please configure your Gemini API key in the environment settings.",
-          followUpSuggestions: [
-            "Tell me about your medications",
-            "Help me understand my symptoms",
-            "What should I ask my doctor?"
-          ],
-          timestamp: new Date().toISOString(),
-          context: { responseType: 'demo_mode' },
-          aiProvider: 'demo'
-        }
-      });
-    }
-
-  } catch (error) {
-    console.error('Chat message error:', error);
-    res.status(500).json({
-      error: 'Chat failed',
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Analyze medicine interactions
-router.post('/analyze-interactions', optionalAuth, async (req, res) => {
-  try {
-    const { medicines, userContext } = req.body;
-
-    if (!medicines || !Array.isArray(medicines) || medicines.length < 1) {
-      return res.status(400).json({
-        error: 'Validation error',
-        message: 'At least 1 medicine is required for analysis'
-      });
-    }
-
-    console.log(`🔬 Analyzing interactions for ${medicines.length} medicines`);
-
-    // Build user context from profile if authenticated
-    let enhancedUserContext = userContext || {};
-    if (req.user) {
-      enhancedUserContext = {
-        ...enhancedUserContext,
-        userId: req.user._id,
-        age: req.user.age,
-        medicalConditions: req.user.medicalConditions || [],
-        currentMedications: req.user.currentMedications || [],
-        allergies: req.user.allergies || []
+      aiResponse = {
+        message: "I'm currently in demo mode. Please configure your Gemini API key to enable real AI conversations.",
+        followUpSuggestions: ["Tell me about medications", "Help with symptoms"],
+        timestamp: new Date().toISOString()
       };
     }
 
-    // Use Gemini service for real interaction analysis
-    if (process.env.ENABLE_AI_CHAT === 'true' && process.env.GEMINI_API_KEY) {
-      const result = await geminiService.analyzeMedicineInteractions(
-        medicines,
-        enhancedUserContext
-      );
-
-      if (result.success) {
-        res.json({
-          success: true,
-          data: result.data,
-          aiProvider: 'gemini'
+    // Save AI response to database
+    if (userId) {
+      try {
+        const savedAiMsg = await ChatMessage.create({
+          userId: new mongoose.Types.ObjectId(userId),
+          conversationId: convId,
+          content: aiResponse.message,
+          sender: 'assistant',
+          aiResponse: { followUpQuestions: aiResponse.followUpSuggestions }
         });
-      } else {
-        res.status(400).json({
-          error: 'Analysis failed',
-          message: result.error || 'Failed to analyze interactions'
-        });
+        console.log(`✅ Saved AI message: ${savedAiMsg._id}`);
+      } catch (err) {
+        console.error('Error saving AI message:', err);
       }
-    } else {
-      // Fallback response
-      res.json({
-        success: true,
-        data: {
-          overallRisk: "unknown",
-          interactions: [],
-          contraindications: [],
-          generalRecommendations: [
-            "Please consult your healthcare provider about these medications",
-            "Enable AI features for detailed interaction analysis"
-          ],
-          warningFlags: ["AI analysis not available in demo mode"],
-          consultationRecommended: true,
-          reasoning: "AI interaction analysis requires Gemini API configuration"
-        },
-        aiProvider: 'demo'
-      });
-    }
-  } catch (error) {
-    console.error('Medicine interaction analysis error:', error);
-    res.status(500).json({
-      error: 'Analysis failed',
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Get dosage guidance
-router.post('/dosage-guidance', auth, async (req, res) => {
-  try {
-    const { medicine } = req.body;
-
-    if (!medicine || !medicine.name) {
-      return res.status(400).json({
-        error: 'Validation error',
-        message: 'Medicine information is required'
-      });
     }
 
-    const aiService = getAIService();
-    const result = await aiService.provideDosageGuidance(
-      medicine,
-      req.user,
-      req.user._id
-    );
-
-    if (result.success) {
-      res.json(result);
-    } else {
-      res.status(400).json({
-        error: 'Guidance failed',
-        message: result.message
-      });
-    }
-  } catch (error) {
-    console.error('Dosage guidance error:', error);
-    res.status(500).json({
-      error: 'Guidance failed',
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Get conversation history
-router.get('/history', auth, async (req, res) => {
-  try {
-    const { conversationId, limit = 20 } = req.query;
-
-    const aiService = getAIService();
-    const result = await aiService.getConversationHistory(
-      req.user._id,
-      conversationId,
-      parseInt(limit)
-    );
-
-    if (result.success) {
-      res.json(result);
-    } else {
-      res.status(400).json({
-        error: 'History fetch failed',
-        message: result.message
-      });
-    }
-  } catch (error) {
-    console.error('Conversation history error:', error);
-    res.status(500).json({
-      error: 'History fetch failed',
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Get conversation summaries
-router.get('/conversations', auth, async (req, res) => {
-  try {
-    const { limit = 10 } = req.query;
-
-    const aiService = getAIService();
-    const result = await aiService.getConversationSummaries(
-      req.user._id,
-      parseInt(limit)
-    );
-
-    if (result.success) {
-      res.json(result);
-    } else {
-      res.status(400).json({
-        error: 'Conversations fetch failed',
-        message: result.message
-      });
-    }
-  } catch (error) {
-    console.error('Conversations fetch error:', error);
-    res.status(500).json({
-      error: 'Conversations fetch failed',
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Health check for AI service
-router.get('/health', async (req, res) => {
-  try {
-    const aiService = getAIService();
-    const isAvailable = aiService.isInitialized;
-    
     res.json({
       success: true,
       data: {
-        aiServiceAvailable: isAvailable,
-        status: isAvailable ? 'operational' : 'unavailable',
-        timestamp: new Date().toISOString()
+        ...aiResponse,
+        conversationId: convId
       }
     });
+
   } catch (error) {
-    console.error('AI health check error:', error);
-    res.status(500).json({
-      error: 'Health check failed',
-      message: 'Internal server error'
+    console.error('Chat message error:', error);
+    res.status(500).json({ error: 'Chat failed', message: 'Internal server error' });
+  }
+});
+
+// Get all conversations (list)
+router.get('/conversations', auth, async (req, res) => {
+  try {
+    console.log(`📋 Getting conversations for user: ${req.user._id}`);
+
+    const conversations = await ChatMessage.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.user._id) } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: '$conversationId',
+          lastMessage: { $first: '$content' },
+          lastMessageAt: { $first: '$createdAt' },
+          messageCount: { $sum: 1 },
+          firstUserMessage: {
+            $last: {
+              $cond: [{ $eq: ['$sender', 'user'] }, '$content', null]
+            }
+          }
+        }
+      },
+      { $sort: { lastMessageAt: -1 } },
+      { $limit: 20 }
+    ]);
+
+    console.log(`📋 Found ${conversations.length} conversations`);
+
+    const formattedConversations = conversations.map(conv => ({
+      id: conv._id,
+      title: (conv.firstUserMessage || conv.lastMessage || 'New Chat').substring(0, 50) + ((conv.firstUserMessage || conv.lastMessage || '').length > 50 ? '...' : ''),
+      lastMessage: (conv.lastMessage || '').substring(0, 60) + ((conv.lastMessage || '').length > 60 ? '...' : ''),
+      lastMessageAt: conv.lastMessageAt,
+      messageCount: conv.messageCount
+    }));
+
+    res.json({ success: true, data: formattedConversations });
+  } catch (error) {
+    console.error('Get conversations error:', error);
+    res.status(500).json({ error: 'Failed to get conversations', message: 'Internal server error' });
+  }
+});
+
+// Get messages for a specific conversation
+router.get('/conversations/:conversationId', auth, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    console.log(`📖 Loading conversation: ${conversationId} for user: ${req.user._id}`);
+
+    const messages = await ChatMessage.find({
+      userId: new mongoose.Types.ObjectId(req.user._id),
+      conversationId
+    }).sort({ createdAt: 1 }).lean();
+
+    console.log(`📖 Found ${messages.length} messages`);
+
+    const formattedMessages = messages.map(msg => ({
+      id: msg._id.toString(),
+      content: msg.content,
+      sender: msg.sender,
+      timestamp: msg.createdAt,
+      followUpQuestions: msg.aiResponse?.followUpQuestions
+    }));
+
+    res.json({ success: true, data: formattedMessages, conversationId });
+  } catch (error) {
+    console.error('Get conversation messages error:', error);
+    res.status(500).json({ error: 'Failed to get messages', message: 'Internal server error' });
+  }
+});
+
+// Delete a conversation
+router.delete('/conversations/:conversationId', auth, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+
+    const result = await ChatMessage.deleteMany({
+      userId: new mongoose.Types.ObjectId(req.user._id),
+      conversationId
     });
+
+    console.log(`🗑️ Deleted ${result.deletedCount} messages from conversation: ${conversationId}`);
+
+    res.json({ success: true, message: 'Conversation deleted' });
+  } catch (error) {
+    console.error('Delete conversation error:', error);
+    res.status(500).json({ error: 'Failed to delete conversation', message: 'Internal server error' });
+  }
+});
+
+// Start a new conversation
+router.post('/conversations/new', auth, async (req, res) => {
+  try {
+    const conversationId = new mongoose.Types.ObjectId().toString();
+    res.json({ success: true, data: { conversationId } });
+  } catch (error) {
+    console.error('New conversation error:', error);
+    res.status(500).json({ error: 'Failed to create conversation', message: 'Internal server error' });
+  }
+});
+
+// Proactive initialization for medicine chat
+router.post('/initialize-medicine-chat', auth, async (req, res) => {
+  try {
+    const { medicineContext } = req.body;
+    const userId = req.user._id;
+
+    if (!medicineContext) {
+      return res.status(400).json({ success: false, error: 'Context is required' });
+    }
+
+    console.log(`[PROACTIVE] Initializing medicine chat for user: ${userId}`);
+
+    // Generate proactive insight
+    const result = await geminiService.generateProactiveInsight(medicineContext);
+
+    if (result.success) {
+      const convId = `med_${userId}_${Date.now()}`;
+      
+      // Save to database
+      await ChatMessage.create({
+        userId: userId,
+        conversationId: convId,
+        content: result.text,
+        sender: 'assistant',
+        context: { medicine: JSON.stringify(medicineContext) }
+      });
+
+      return res.json({
+        success: true,
+        conversationId: convId,
+        initialMessage: result.text
+      });
+    } else {
+      throw new Error(result.error || 'Initialization failed');
+    }
+  } catch (error) {
+    console.error('❌ Proactive init error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Medicine-specific query endpoint (supports context history)
+router.post('/medicine-query', optionalAuth, async (req, res) => {
+  try {
+    const { message, medicineContext, conversationId, language } = req.body;
+
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+
+    if (!medicineContext) {
+      return res.status(400).json({ success: false, error: 'Medicine context is required' });
+    }
+
+    const userId = req.user?._id;
+    // Always ensure we have a conversationId
+    const convId = conversationId || (userId ? `med_${userId}_${Date.now()}` : `med_anon_${Date.now()}`);
+
+    console.log(`💊 Medicine query from ${userId ? 'user:' + userId : 'anonymous'}, convId: ${convId}`);
+
+    // Load history if user is authenticated
+    let conversationHistory = [];
+    if (userId && convId) {
+      try {
+        const previousMessages = await ChatMessage.find({
+          userId: userId,
+          conversationId: convId
+        })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .lean();
+
+        conversationHistory = previousMessages.reverse().map(msg => ({
+          sender: msg.sender,
+          message: msg.content
+        }));
+      } catch (err) {
+        console.error('Error loading medicine chat history:', err);
+      }
+    }
+
+    // Save user message to database if user is authenticated
+    if (userId && convId) {
+      try {
+        await ChatMessage.create({
+          userId: userId,
+          conversationId: convId,
+          content: message.trim(),
+          sender: 'user',
+          context: { medicine: medicineContext }
+        });
+      } catch (err) {
+        console.error('Error saving medicine query message:', err);
+      }
+    }
+
+    // Generate AI response
+    const result = await geminiService.generateMedicineQueryResponse(
+      message.trim(),
+      medicineContext,
+      conversationHistory,
+      language
+    );
+
+    console.log(`🤖 AI Response Success: ${result.success}, Provider: ${result.data?.provider}`);
+
+    if (result.success && result.data?.message) {
+      // Save AI response to database if user is authenticated
+      if (userId && convId) {
+        try {
+          await ChatMessage.create({
+            userId: userId,
+            conversationId: convId,
+            content: result.data.message,
+            sender: 'assistant',
+            aiResponse: { provider: result.data.provider }
+          });
+        } catch (err) {
+          console.error('Error saving AI medicine response:', err);
+        }
+      }
+
+      return res.json({
+        success: true,
+        response: result.data.message,
+        data: {
+          ...result.data,
+          conversationId: convId
+        }
+      });
+    } else {
+      throw new Error(result.error || 'AI processing failed');
+    }
+  } catch (error) {
+    console.error('❌ Medicine query error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to process query' });
   }
 });
 

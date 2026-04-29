@@ -1,11 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import Select from '../components/ui/Select';
+import { useLanguage } from '../contexts/LanguageContext';
+import { EyeIcon, EyeSlashIcon, ChevronLeftIcon } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+import { GradientButton, PremiumInput, PremiumSelect, PremiumDatePicker } from '../components/ui/PremiumComponents';
+import register3d from '../assets/images/3d-register.png';
+
+// Animation Variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      duration: 0.6,
+      when: "beforeChildren",
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5 }
+  }
+};
+
+const floatingOrb = {
+  animate: {
+    y: [0, -20, 0],
+    scale: [1, 1.05, 1],
+    transition: {
+      duration: 6,
+      repeat: Infinity,
+      ease: "easeInOut"
+    }
+  }
+};
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -22,13 +56,19 @@ const Register = () => {
   const [error, setError] = useState('');
 
   const { register } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     setError('');
   };
 
@@ -37,16 +77,14 @@ const Register = () => {
     setIsLoading(true);
     setError('');
 
-    // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('auth.errorPasswordsNoMatch'));
       setIsLoading(false);
       return;
     }
 
-    // Validate password length
     if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      setError(t('auth.errorPasswordTooShort'));
       setIsLoading(false);
       return;
     }
@@ -59,181 +97,274 @@ const Register = () => {
       gender: formData.gender || undefined
     };
 
-    const result = await register(userData);
-    
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.message);
+    try {
+      const result = await register(userData);
+      if (result.success) {
+        navigate('/');
+      } else {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError(t('auth.errorRegistrationFailed'));
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        <Card variant="elevated" className="shadow-2xl">
-          <div className="p-8">
-            {/* Header */}
-            <div className="text-center mb-8">
-              <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg mb-4">
-                <span className="text-3xl font-bold text-white">M</span>
+    <div className="min-h-screen w-full relative overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+
+      {/* 1. Animated Background Layer */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        {/* Gradient Mesh - Differs slightly from Login for variety */}
+        <div className="absolute top-0 left-0 w-[50vw] h-[50vw] bg-blue-500/10 rounded-full blur-[100px] mix-blend-multiply dark:mix-blend-screen animate-blob" />
+        <div className="absolute bottom-0 right-0 w-[50vw] h-[50vw] bg-teal-500/10 rounded-full blur-[100px] mix-blend-multiply dark:mix-blend-screen animate-blob animation-delay-2000" />
+        <div className="absolute top-1/2 left-1/4 w-[40vw] h-[40vw] bg-purple-500/10 rounded-full blur-[100px] mix-blend-multiply dark:mix-blend-screen animate-blob animation-delay-4000" />
+
+        {/* Grid Pattern */}
+        <div className="absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-700/30 [mask-image:linear-gradient(to_bottom,white,transparent)]" />
+      </div>
+
+      {/* 2. Main Content Container */}
+      <div className="relative z-10 flex min-h-screen">
+
+        {/* Back Button */}
+        <motion.button
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.5 }}
+          onClick={() => navigate('/')}
+          className="fixed top-6 left-6 z-50 p-3 rounded-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-lg text-slate-600 dark:text-slate-300 hover:scale-105 active:scale-95 transition-all group"
+        >
+          <ChevronLeftIcon className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
+        </motion.button>
+
+        {/* Left Side - Registration Form (Form First on Register page?) 
+            Actually, let's keep consistent pattern: Visual Left, Form Right.
+            Or flip it for visual interest? Let's flip it for Register.
+            Left: Form, Right: Visual.
+        */}
+
+        {/* Left Side - Form (Mobile Full, Desktop 50%) */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-12 overflow-y-auto">
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={containerVariants}
+            className="w-full max-w-lg"
+          >
+            <div className="w-full py-4 sm:py-8">
+
+              {/* Header */}
+              <div className="text-center mb-8">
+                <div className="lg:hidden mb-6 flex justify-center">
+                  <motion.div
+                    variants={itemVariants}
+                    className="p-1 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-xl overflow-hidden"
+                  >
+                    <div className="bg-slate-900 dark:bg-slate-900 rounded-xl p-0 overflow-hidden">
+                      <video 
+                        autoPlay 
+                        muted 
+                        playsInline 
+                        loop
+                        className="w-40 aspect-video object-contain bg-slate-900"
+                      >
+                        <source src="/videos/logo_animation.mp4" type="video/mp4" />
+                      </video>
+                    </div>
+                  </motion.div>
+                </div>
+
+                <motion.h2 variants={itemVariants} className="text-3xl font-bold font-display text-slate-900 dark:text-white mb-2">
+                  {t('auth.signUp')}
+                </motion.h2>
+                <motion.p variants={itemVariants} className="text-slate-500 dark:text-slate-400">
+                  {t('auth.hasAccount')} {' '}
+                  <Link to="/login" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                    {t('auth.signIn')}
+                  </Link>
+                </motion.p>
               </div>
-              <h2 className="text-3xl font-extrabold text-gray-900 mb-2">
-                Create your account
-              </h2>
-              <p className="text-gray-600">
-                Or{' '}
-                <Link
-                  to="/login"
-                  className="font-semibold text-primary-600 hover:text-primary-700 transition-colors"
-                >
-                  sign in to existing account
-                </Link>
-              </p>
+
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <AnimatePresence mode="wait">
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                      exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                      className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-center gap-3 text-red-600 dark:text-red-400 text-sm font-medium"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                      {error}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Name & Email Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <motion.div variants={itemVariants}>
+                    <PremiumInput
+                      id="name"
+                      name="name"
+                      type="text"
+                      label={t('contacts.name')}
+                      placeholder={t('contacts.fullNamePlaceholder')}
+                      value={formData.name}
+                      onChange={handleChange}
+                      required
+                      className="!bg-slate-200/20 dark:!bg-slate-800/40 border-slate-200/50 dark:border-slate-700/50"
+                    />
+                  </motion.div>
+                  <motion.div variants={itemVariants}>
+                    <PremiumInput
+                      id="email"
+                      name="email"
+                      type="email"
+                      label={t('auth.email')}
+                      placeholder={t('auth.emailPlaceholder')}
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      className="!bg-slate-200/20 dark:!bg-slate-800/40 border-slate-200/50 dark:border-slate-700/50"
+                    />
+                  </motion.div>
+                </div>
+
+                {/* Info Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <motion.div variants={itemVariants}>
+                    <PremiumDatePicker
+                      label={t('auth.dobLabel')}
+                      value={formData.dateOfBirth}
+                      onChange={(date) => setFormData(prev => ({ ...prev, dateOfBirth: date }))}
+                      placeholder={t('auth.dobPlaceholder')}
+                    />
+                  </motion.div>
+                  <motion.div variants={itemVariants}>
+                    <PremiumSelect
+                      label={t('auth.genderLabel')}
+                      options={[
+                        { value: 'male', label: t('auth.genderMale') },
+                        { value: 'female', label: t('auth.genderFemale') },
+                        { value: 'other', label: t('auth.genderOther') }
+                      ]}
+                      value={formData.gender}
+                      onChange={(value) => setFormData(prev => ({ ...prev, gender: value }))}
+                      placeholder={t('auth.genderPlaceholder')}
+                    />
+                  </motion.div>
+                </div>
+
+                {/* Password Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <motion.div variants={itemVariants}>
+                    <div className="relative">
+                      <PremiumInput
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        label={t('auth.password')}
+                        placeholder={t('auth.createPasswordPlaceholder')}
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                        className="!bg-slate-200/20 dark:!bg-slate-800/40 border-slate-200/50 dark:border-slate-700/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-[38px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                      >
+                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </motion.div>
+                  <motion.div variants={itemVariants}>
+                    <div className="relative">
+                      <PremiumInput
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        label={t('auth.password')}
+                        placeholder={t('auth.confirmPasswordPlaceholder')}
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        required
+                        className="!bg-slate-200/20 dark:!bg-slate-800/40 border-slate-200/50 dark:border-slate-700/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-4 top-[38px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                      >
+                        {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </motion.div>
+                </div>
+
+                <motion.div variants={itemVariants} className="pt-4">
+                  <GradientButton
+                    type="submit"
+                    variant="luxury"
+                    size="lg"
+                    fullWidth
+                    isLoading={isLoading}
+                    className="!h-14 !text-lg shadow-xl shadow-slate-200 dark:shadow-none font-bold tracking-tight"
+                  >
+                    {t('auth.signUp')}
+                  </GradientButton>
+                </motion.div>
+
+                <p className="text-xs text-center text-slate-500 dark:text-slate-500 mt-4 leading-relaxed">
+                  {t('auth.termsNotice')}
+                </p>
+              </form>
             </div>
+          </motion.div>
+        </div>
 
-            {/* Form */}
-            <form className="space-y-5" onSubmit={handleSubmit}>
-              {error && (
-                <Card variant="outline" borderAccent="danger" className="bg-red-50">
-                  <div className="p-4">
-                    <p className="text-red-700 text-sm">{error}</p>
-                  </div>
-                </Card>
-              )}
-
-              <Input
-                id="name"
-                name="name"
-                type="text"
-                label="Full Name"
-                placeholder="Enter your full name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-                variant="medical"
-                size="lg"
-              />
-
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                label="Email address"
-                placeholder="Enter your email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                variant="medical"
-                size="lg"
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
-                  id="dateOfBirth"
-                  name="dateOfBirth"
-                  type="date"
-                  label="Date of Birth"
-                  value={formData.dateOfBirth}
-                  onChange={handleChange}
-                  variant="medical"
-                  size="lg"
-                />
-
-                <Select
-                  id="gender"
-                  name="gender"
-                  label="Gender"
-                  value={formData.gender}
-                  onChange={handleChange}
-                  variant="medical"
-                  size="lg"
-                >
-                  <option value="">Select gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </Select>
+        {/* Right Side - Visual (Desktop Only) */}
+        <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center p-12 lg:sticky lg:top-0 lg:h-screen">
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={containerVariants}
+            className="w-full max-w-lg relative"
+          >
+            {/* 3D Image - Static (No Float) */}
+            <motion.div variants={itemVariants} className="relative z-10 w-full flex justify-center">
+              <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/30 to-cyan-500/30 blur-[60px] rounded-full scale-75 -z-10" />
+              <div className="p-1.5 rounded-[2.5rem] bg-gradient-to-br from-blue-500 to-cyan-500 shadow-2xl">
+                <div className="bg-slate-900 dark:bg-slate-900 rounded-[2.25rem] p-0 overflow-hidden shadow-2xl">
+                  <video 
+                    autoPlay 
+                    muted 
+                    playsInline 
+                    loop
+                    className="w-full aspect-video object-contain bg-slate-900"
+                  >
+                    <source src="/videos/logo_animation.mp4" type="video/mp4" />
+                  </video>
+                </div>
               </div>
+            </motion.div>
 
-              <div className="relative">
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  label="Password"
-                  placeholder="Create a password (min. 6 characters)"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  variant="medical"
-                  size="lg"
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-[42px] text-gray-400 hover:text-gray-600 transition-colors"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
+            {/* Text */}
+            <motion.div variants={itemVariants} className="text-center mt-12">
+              <h1 className="text-4xl lg:text-5xl font-display font-bold text-slate-900 dark:text-white mb-4 leading-tight">
+                {t('auth.joinFuture')}
+              </h1>
+              <p className="text-lg text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                {t('auth.joinDescription')}
+              </p>
+            </motion.div>
+          </motion.div>
+        </div>
 
-              <div className="relative">
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  label="Confirm Password"
-                  placeholder="Confirm your password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
-                  variant="medical"
-                  size="lg"
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-[42px] text-gray-400 hover:text-gray-600 transition-colors"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  {showConfirmPassword ? (
-                    <EyeSlashIcon className="h-5 w-5" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                fullWidth
-                loading={isLoading}
-                className="mt-6"
-              >
-                {isLoading ? 'Creating account...' : 'Create account'}
-              </Button>
-
-              <div className="text-xs text-gray-500 text-center mt-4">
-                By creating an account, you agree to our{' '}
-                <Link to="/terms" className="text-primary-600 hover:text-primary-700 font-medium">
-                  Terms of Service
-                </Link>{' '}
-                and{' '}
-                <Link to="/privacy" className="text-primary-600 hover:text-primary-700 font-medium">
-                  Privacy Policy
-                </Link>
-              </div>
-            </form>
-          </div>
-        </Card>
       </div>
     </div>
   );

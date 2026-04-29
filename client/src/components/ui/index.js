@@ -92,6 +92,7 @@ export {
   ResponsiveBreadcrumb,
   BreadcrumbWithDropdown
 } from './Breadcrumb';
+export { default as PremiumSidebar } from './PremiumSidebar';
 
 // Form Components
 export { default as Input } from './Input';
@@ -303,6 +304,32 @@ export { default as AccessibilityTest } from '../test/AccessibilityTest';
 export { default as VisualAccessibilityTest } from '../test/VisualAccessibilityTest';
 export { default as MotorCognitiveTest } from '../test/MotorCognitiveTest';
 export { default as SmartInterfaceTest } from '../test/SmartInterfaceTest';
+
+// Premium Components
+export {
+  GlassCard,
+  FeatureCard,
+  StatCard,
+  GradientButton,
+  ActionButton,
+  IconButton as PremiumIconButton,
+  SectionHeader,
+  StatusBadge,
+  PremiumInput,
+  PremiumTextarea,
+  Skeleton,
+  SkeletonCard,
+  LoadingSkeleton,
+  EmptyState as PremiumEmptyState,
+  Alert,
+  Divider as PremiumDivider,
+  Avatar,
+  ProgressBar,
+  Tooltip,
+  PageTransition as PremiumPageTransition,
+  AnimatedList,
+  AnimatedListItem
+} from './PremiumComponents';
 
 // Re-export design system utilities for convenience
 // Note: Wildcard exports commented out to avoid duplicate export conflicts

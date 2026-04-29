@@ -35,22 +35,22 @@ const Card = forwardRef(({
   // Base card classes with enhanced animations
   const baseClasses = 'card-base group';
   
-  // Enhanced variant classes
+  // Enhanced variant classes with dark mode support
   const variantClasses = {
-    elevated: 'card-elevated',
-    interactive: 'card-interactive',
-    medical: 'card-medical',
-    outline: 'bg-white border-2 border-gray-200 hover:border-primary-300 hover:shadow-md transition-all duration-200',
-    glass: 'glass backdrop-blur-md border border-white/20 shadow-xl',
-    gradient: 'bg-gradient-to-br from-primary-50 via-white to-secondary-50 border border-primary-100 shadow-lg',
-    compact: 'bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200'
+    elevated: 'bg-white dark:bg-slate-800 rounded-2xl shadow-premium border border-gray-100/50 dark:border-slate-700/50 hover:shadow-premium-lg hover:-translate-y-1 transition-all duration-300',
+    interactive: 'bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-gray-100 dark:border-slate-700 cursor-pointer hover:shadow-lg hover:border-primary-200 dark:hover:border-primary-700 hover:bg-primary-50/30 dark:hover:bg-primary-900/20 active:scale-[0.98] transition-all duration-200',
+    medical: 'bg-gradient-to-br from-white to-primary-50/30 dark:from-slate-800 dark:to-primary-900/20 rounded-2xl shadow-lg border border-primary-100 dark:border-primary-800/30 border-l-4 border-l-primary-500',
+    outline: 'bg-white dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-600 rounded-2xl hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all duration-200',
+    glass: 'bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 shadow-xl rounded-2xl',
+    gradient: 'bg-gradient-to-br from-primary-50 via-white to-secondary-50 dark:from-primary-900/30 dark:via-slate-800 dark:to-secondary-900/30 border border-primary-100 dark:border-primary-800/30 shadow-lg rounded-2xl',
+    compact: 'bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all duration-200'
   };
 
-  // Size classes for different card sizes
+  // Size classes for different card sizes - responsive
   const sizeClasses = {
-    sm: 'p-4 sm:p-5',
-    md: 'p-5 sm:p-6',
-    lg: 'p-6 sm:p-8'
+    sm: 'p-3 sm:p-4 md:p-5',
+    md: 'p-4 sm:p-5 md:p-6',
+    lg: 'p-5 sm:p-6 md:p-8'
   };
 
   // Border accent classes

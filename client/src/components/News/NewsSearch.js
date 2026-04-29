@@ -4,8 +4,11 @@ import {
   XMarkIcon,
   ClockIcon
 } from '@heroicons/react/24/outline';
+import { PremiumInput } from '../ui/PremiumComponents';
+import { useAuth } from '../../contexts/AuthContext';
 
 const NewsSearch = ({ onSearch, initialQuery = '' }) => {
+  const { user, isAuthenticated, updateProfile } = useAuth();
   const [query, setQuery] = useState(initialQuery);
   const [recentSearches, setRecentSearches] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -24,18 +27,22 @@ const NewsSearch = ({ onSearch, initialQuery = '' }) => {
   ];
 
   useEffect(() => {
-    // Load recent searches from localStorage
-    const saved = localStorage.getItem('newsSearchHistory');
-    if (saved) {
-      try {
-        setRecentSearches(JSON.parse(saved));
-      } catch (error) {
-        console.error('Failed to parse search history:', error);
+    if (isAuthenticated && user?.newsSearchHistory) {
+      setRecentSearches(user.newsSearchHistory);
+    } else {
+      // Load recent searches from localStorage
+      const saved = localStorage.getItem('newsSearchHistory');
+      if (saved) {
+        try {
+          setRecentSearches(JSON.parse(saved));
+        } catch (error) {
+          console.error('Failed to parse search history:', error);
+        }
       }
     }
-  }, []);
+  }, [isAuthenticated, user]);
 
-  const saveSearchToHistory = (searchQuery) => {
+  const saveSearchToHistory = async (searchQuery) => {
     if (!searchQuery.trim()) return;
 
     const updatedSearches = [
@@ -45,12 +52,18 @@ const NewsSearch = ({ onSearch, initialQuery = '' }) => {
 
     setRecentSearches(updatedSearches);
     localStorage.setItem('newsSearchHistory', JSON.stringify(updatedSearches));
+
+    if (isAuthenticated) {
+      await updateProfile({
+        newsSearchHistory: updatedSearches
+      });
+    }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const trimmedQuery = query.trim();
-    
+
     if (trimmedQuery) {
       saveSearchToHistory(trimmedQuery);
       onSearch(trimmedQuery);
@@ -77,54 +90,52 @@ const NewsSearch = ({ onSearch, initialQuery = '' }) => {
   };
 
   return (
-    <div className="relative">
+    <div className="relative z-50">
       {/* Search Form */}
       <form onSubmit={handleSubmit} className="relative">
-        <div className="relative">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setShowSuggestions(true)}
-            placeholder="Search health news..."
-            className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <XMarkIcon className="h-5 w-5" />
-            </button>
-          )}
-        </div>
+        <PremiumInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setShowSuggestions(true)}
+          placeholder="Search health news..."
+          icon={MagnifyingGlassIcon}
+          className="w-full"
+          inputClassName="!py-4 !pl-16 !rounded-2xl shadow-sm border-gray-200 focus:border-primary-500"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={clearSearch}
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        )}
       </form>
 
       {/* Search Suggestions Dropdown */}
       {showSuggestions && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-gray-100 dark:border-gray-800 rounded-2xl shadow-premium-lg z-50 max-h-96 overflow-y-auto">
           {/* Recent Searches */}
           {recentSearches.length > 0 && (
-            <div className="p-3 border-b border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-medium text-gray-700">Recent Searches</h4>
+            <div className="p-2 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center justify-between px-3 py-2">
+                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recent</h4>
                 <button
                   onClick={clearSearchHistory}
-                  className="text-xs text-gray-500 hover:text-gray-700"
+                  className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium"
                 >
-                  Clear
+                  Clear all
                 </button>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {recentSearches.slice(0, 5).map((search, index) => (
                   <button
                     key={index}
                     onClick={() => handleSuggestionClick(search)}
-                    className="flex items-center w-full px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 rounded"
+                    className="flex items-center w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors"
                   >
-                    <ClockIcon className="h-4 w-4 text-gray-400 mr-2" />
+                    <ClockIcon className="h-4 w-4 text-gray-400 mr-3" />
                     {search}
                   </button>
                 ))}
@@ -133,11 +144,11 @@ const NewsSearch = ({ onSearch, initialQuery = '' }) => {
           )}
 
           {/* Popular Health Topics */}
-          <div className="p-3">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Popular Health Topics</h4>
-            <div className="space-y-1">
+          <div className="p-2">
+            <h4 className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Popular Topics</h4>
+            <div className="space-y-0.5">
               {healthSearchSuggestions
-                .filter(suggestion => 
+                .filter(suggestion =>
                   !query || suggestion.toLowerCase().includes(query.toLowerCase())
                 )
                 .slice(0, 8)
@@ -145,9 +156,9 @@ const NewsSearch = ({ onSearch, initialQuery = '' }) => {
                   <button
                     key={index}
                     onClick={() => handleSuggestionClick(suggestion)}
-                    className="flex items-center w-full px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 rounded"
+                    className="flex items-center w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors"
                   >
-                    <MagnifyingGlassIcon className="h-4 w-4 text-gray-400 mr-2" />
+                    <MagnifyingGlassIcon className="h-4 w-4 text-gray-400 mr-3" />
                     {suggestion}
                   </button>
                 ))
@@ -156,12 +167,11 @@ const NewsSearch = ({ onSearch, initialQuery = '' }) => {
           </div>
 
           {/* Search Tips */}
-          <div className="p-3 bg-gray-50 border-t border-gray-100">
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Search Tips</h4>
-            <ul className="text-xs text-gray-600 space-y-1">
+          <div className="p-3 bg-gray-50/50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-800 rounded-b-2xl">
+            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">PRO TIPS</h4>
+            <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1.5 pl-1">
               <li>• Use specific medical terms for better results</li>
               <li>• Try "condition + treatment" or "disease + prevention"</li>
-              <li>• Search for recent studies or breakthrough news</li>
             </ul>
           </div>
         </div>

@@ -5,16 +5,24 @@ import {
   BellSlashIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  SpeakerWaveIcon,
+  MusicalNoteIcon
 } from '@heroicons/react/24/outline';
 import notificationService from '../../services/notificationService';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const NotificationSettings = ({ onPermissionChange }) => {
+  const { t } = useLanguage();
   const [permissionStatus, setPermissionStatus] = useState(null);
   const [isRequesting, setIsRequesting] = useState(false);
+  const [availableSounds, setAvailableSounds] = useState([]);
+  const [currentSound, setCurrentSound] = useState('');
 
   useEffect(() => {
     updatePermissionStatus();
+    setAvailableSounds(notificationService.getAvailableSounds());
+    setCurrentSound(notificationService.selectedSound);
   }, []);
 
   const updatePermissionStatus = () => {
@@ -48,6 +56,12 @@ const NotificationSettings = ({ onPermissionChange }) => {
 
   const handleTestNotification = () => {
     notificationService.showTestNotification();
+  };
+  
+  const handleSoundChange = (e) => {
+    const soundId = e.target.value;
+    notificationService.setSoundTheme(soundId);
+    setCurrentSound(soundId);
   };
 
   if (!permissionStatus) {
@@ -92,8 +106,8 @@ const NotificationSettings = ({ onPermissionChange }) => {
   const getStatusMessage = () => {
     if (!permissionStatus.isSupported) {
       return {
-        title: 'Notifications Not Supported',
-        message: 'Your browser does not support push notifications.',
+        title: t('notifications.notSupported'),
+        message: t('notifications.browserNotSupported'),
         type: 'info'
       };
     }
@@ -101,20 +115,20 @@ const NotificationSettings = ({ onPermissionChange }) => {
     switch (permissionStatus.permission) {
       case 'granted':
         return {
-          title: 'Notifications Enabled',
-          message: 'You will receive medication reminders and alerts.',
+          title: t('notifications.enabled'),
+          message: t('notifications.willReceiveReminders'),
           type: 'success'
         };
       case 'denied':
         return {
-          title: 'Notifications Blocked',
-          message: 'Please enable notifications in your browser settings to receive medication reminders.',
+          title: t('notifications.blocked'),
+          message: t('notifications.enableInBrowser'),
           type: 'error'
         };
       default:
         return {
-          title: 'Enable Notifications',
-          message: 'Allow notifications to receive medication reminders and never miss a dose.',
+          title: t('notifications.enableNotifications'),
+          message: t('notifications.allowToReceive'),
           type: 'warning'
         };
     }
@@ -143,17 +157,35 @@ const NotificationSettings = ({ onPermissionChange }) => {
                 disabled={isRequesting}
                 className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {isRequesting ? 'Requesting...' : 'Enable Notifications'}
+                {isRequesting ? t('notifications.requesting') : t('notifications.enableNotifications')}
               </button>
             )}
             
             {permissionStatus.isGranted && (
-              <button
-                onClick={handleTestNotification}
-                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition-colors"
-              >
-                Test Notification
-              </button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={handleTestNotification}
+                  className="px-4 py-2 border border-blue-200 text-blue-700 text-sm font-medium rounded-xl hover:bg-blue-50 transition-colors flex items-center gap-2"
+                >
+                  <BellIcon className="w-4 h-4" />
+                  {t('notifications.testNotification')}
+                </button>
+                
+                <div className="flex items-center gap-2 ml-auto">
+                  <SpeakerWaveIcon className="w-5 h-5 text-gray-400" />
+                  <select
+                    value={currentSound}
+                    onChange={handleSoundChange}
+                    className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none min-w-[140px]"
+                  >
+                    {availableSounds.map(sound => (
+                      <option key={sound.id} value={sound.id}>
+                        {sound.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             )}
           </div>
           
@@ -163,11 +195,11 @@ const NotificationSettings = ({ onPermissionChange }) => {
               <div className="flex items-start space-x-2">
                 <InformationCircleIcon className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-red-700">
-                  <p className="font-medium mb-1">How to enable notifications:</p>
+                  <p className="font-medium mb-1">{t('notifications.howToEnable')}</p>
                   <ol className="list-decimal list-inside space-y-1">
-                    <li>Click the lock icon in your browser's address bar</li>
-                    <li>Change notifications from "Block" to "Allow"</li>
-                    <li>Refresh this page</li>
+                    <li>{t('notifications.step1')}</li>
+                    <li>{t('notifications.step2')}</li>
+                    <li>{t('notifications.step3')}</li>
                   </ol>
                 </div>
               </div>
@@ -179,11 +211,11 @@ const NotificationSettings = ({ onPermissionChange }) => {
               <div className="flex items-start space-x-2">
                 <CheckCircleIcon className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-green-700">
-                  <p>Notifications are working! You'll receive reminders for:</p>
+                  <p>{t('notifications.notificationsWorking')}</p>
                   <ul className="list-disc list-inside mt-1 space-y-1">
-                    <li>Scheduled medication times</li>
-                    <li>Missed dose alerts</li>
-                    <li>Daily adherence summaries</li>
+                    <li>{t('notifications.scheduledTimes')}</li>
+                    <li>{t('notifications.missedDoseAlerts')}</li>
+                    <li>{t('notifications.dailySummaries')}</li>
                   </ul>
                 </div>
               </div>

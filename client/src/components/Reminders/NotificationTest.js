@@ -70,12 +70,21 @@ const NotificationTest = () => {
       );
 
       if (notification) {
-        addTestResult('Medication Reminder', true, 'Medication reminder shown with actions');
+        addTestResult('Medication Reminder', true, 'Medication reminder shown successfully');
       } else {
         addTestResult('Medication Reminder', false, 'Failed to show medication reminder');
       }
     } catch (error) {
       addTestResult('Medication Reminder', false, error.message);
+    }
+  };
+
+  const testSoundOnly = () => {
+    try {
+      notificationService.testSound();
+      addTestResult('Sound Test', true, 'Sound played - did you hear it?');
+    } catch (error) {
+      addTestResult('Sound Test', false, error.message);
     }
   };
 
@@ -118,32 +127,32 @@ const NotificationTest = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-          <BellIcon className="h-5 w-5 mr-2 text-blue-600" />
+    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 sm:mb-6">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
+          <BellIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-blue-600" />
           Notification System Test
         </h3>
         <button
           onClick={clearResults}
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-gray-500 hover:text-gray-700 self-start sm:self-auto"
         >
           Clear Results
         </button>
       </div>
 
       {/* Permission Status */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-        <h4 className="font-medium text-gray-900 mb-2">Permission Status</h4>
-        <div className="space-y-2 text-sm">
+      <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
+        <h4 className="font-medium text-gray-900 mb-2 text-sm sm:text-base">Permission Status</h4>
+        <div className="space-y-2 text-xs sm:text-sm">
           <div className="flex items-center">
-            <span className="w-24">Supported:</span>
+            <span className="w-20 sm:w-24">Supported:</span>
             <span className={`font-medium ${permissionStatus?.isSupported ? 'text-green-600' : 'text-red-600'}`}>
               {permissionStatus?.isSupported ? 'Yes' : 'No'}
             </span>
           </div>
           <div className="flex items-center">
-            <span className="w-24">Permission:</span>
+            <span className="w-20 sm:w-24">Permission:</span>
             <span className={`font-medium ${
               permissionStatus?.isGranted ? 'text-green-600' : 
               permissionStatus?.canRequest ? 'text-yellow-600' : 'text-red-600'
@@ -155,19 +164,26 @@ const NotificationTest = () => {
       </div>
 
       {/* Test Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6">
         <button
           onClick={requestPermission}
           disabled={permissionStatus?.isGranted}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="px-3 sm:px-4 py-2.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm min-h-[44px]"
         >
           Request Permission
         </button>
 
         <button
+          onClick={testSoundOnly}
+          className="px-3 sm:px-4 py-2.5 sm:py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm min-h-[44px]"
+        >
+          🔊 Test Sound Only
+        </button>
+
+        <button
           onClick={testBasicNotification}
           disabled={!permissionStatus?.isGranted}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="px-3 sm:px-4 py-2.5 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm min-h-[44px]"
         >
           Test Basic Notification
         </button>
@@ -175,7 +191,7 @@ const NotificationTest = () => {
         <button
           onClick={testMedicationReminder}
           disabled={!permissionStatus?.isGranted}
-          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="px-3 sm:px-4 py-2.5 sm:py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm min-h-[44px]"
         >
           Test Medication Reminder
         </button>
@@ -183,7 +199,7 @@ const NotificationTest = () => {
         <button
           onClick={testScheduledNotification}
           disabled={!permissionStatus?.isGranted}
-          className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="px-3 sm:px-4 py-2.5 sm:py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm min-h-[44px]"
         >
           Test Scheduled (5s delay)
         </button>
@@ -191,7 +207,7 @@ const NotificationTest = () => {
         <button
           onClick={testEarlyReminder}
           disabled={!permissionStatus?.isGranted}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="px-3 sm:px-4 py-2.5 sm:py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm min-h-[44px]"
         >
           Test Early Reminder
         </button>
@@ -200,32 +216,32 @@ const NotificationTest = () => {
       {/* Test Results */}
       {testResults.length > 0 && (
         <div>
-          <h4 className="font-medium text-gray-900 mb-3">Test Results</h4>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+          <h4 className="font-medium text-gray-900 mb-2 sm:mb-3 text-sm sm:text-base">Test Results</h4>
+          <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
             {testResults.map((result) => (
               <div
                 key={result.id}
-                className={`flex items-start p-3 rounded-lg ${
+                className={`flex items-start p-2 sm:p-3 rounded-lg ${
                   result.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
                 }`}
               >
-                <div className="flex-shrink-0 mr-3">
+                <div className="flex-shrink-0 mr-2 sm:mr-3">
                   {result.success ? (
-                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
+                    <CheckCircleIcon className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                   ) : (
-                    <XCircleIcon className="h-5 w-5 text-red-600" />
+                    <XCircleIcon className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className={`text-sm font-medium ${
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                    <p className={`text-xs sm:text-sm font-medium ${
                       result.success ? 'text-green-800' : 'text-red-800'
                     }`}>
                       {result.test}
                     </p>
-                    <span className="text-xs text-gray-500">{result.timestamp}</span>
+                    <span className="text-[10px] sm:text-xs text-gray-500">{result.timestamp}</span>
                   </div>
-                  <p className={`text-sm ${
+                  <p className={`text-xs sm:text-sm ${
                     result.success ? 'text-green-700' : 'text-red-700'
                   }`}>
                     {result.message}
@@ -238,17 +254,17 @@ const NotificationTest = () => {
       )}
 
       {/* Instructions */}
-      <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+      <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg">
         <div className="flex items-start">
-          <ExclamationTriangleIcon className="h-5 w-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-800">
+          <ExclamationTriangleIcon className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
+          <div className="text-xs sm:text-sm text-blue-800">
             <p className="font-medium mb-1">Testing Instructions:</p>
             <ul className="list-disc list-inside space-y-1">
               <li>First, click "Request Permission" to enable notifications</li>
               <li>Test basic notifications to ensure they work</li>
               <li>Try medication reminders with action buttons</li>
               <li>Test scheduled notifications (will appear after 5 seconds)</li>
-              <li>Check that notifications appear even when the browser tab is not active</li>
+              <li className="hidden sm:list-item">Check that notifications appear even when the browser tab is not active</li>
             </ul>
           </div>
         </div>

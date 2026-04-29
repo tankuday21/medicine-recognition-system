@@ -12,7 +12,7 @@ class ScannerService {
   // Scan barcode and use AI to get medicine information
   async scanBarcode(barcode, userId = null) {
     try {
-      console.log(`🔍 Processing barcode with AI: ${barcode}`);
+      console.log(`🔍 Processing barcode with AI (NVIDIA Primary): ${barcode}`);
       
       // Use Gemini AI to get medicine information from barcode
       let geminiService;
@@ -64,7 +64,7 @@ class ScannerService {
   // Process QR code data using AI
   async processQRCode(qrData, userId = null) {
     try {
-      console.log(`🔍 Processing QR code with AI: ${qrData}`);
+      console.log(`🔍 Processing QR code with AI (NVIDIA Primary): ${qrData}`);
       
       // Use Gemini AI to parse and understand QR code data
       let geminiService;
@@ -114,7 +114,7 @@ class ScannerService {
     let tempImagePaths = [];
     
     try {
-      console.log(`🔍 Processing ${buffers.length} medicine image(s) for identification with Gemini AI`);
+      console.log(`🔍 Processing ${buffers.length} medicine image(s) for identification with AI (NVIDIA Primary)`);
       
       // Process all images
       const tempDir = path.join(__dirname, '../temp');
@@ -188,13 +188,26 @@ class ScannerService {
               expiryInfo: pillData.expiryInfo || null,
               manufacturerInfo: pillData.manufacturerInfo || null,
               safetyWarning: pillData.safetyWarning,
-              verificationNeeded: pillData.verificationNeeded
+              verificationNeeded: pillData.verificationNeeded,
+              // New fields
+              sideEffects: pillData.sideEffects || null,
+              drugInteractions: pillData.drugInteractions || [],
+              howToTake: pillData.howToTake || null,
+              pregnancySafety: pillData.pregnancySafety || null,
+              ageRestrictions: pillData.ageRestrictions || null,
+              prescriptionRequired: pillData.prescriptionRequired,
+              priceInfo: pillData.priceInfo || null,
+              foodAlcoholInteractions: pillData.foodAlcoholInteractions || null
             }
           };
 
           // Log scan history if user is provided
           if (userId) {
             await this.logScanHistory(userId, scanResult);
+            // PROACTIVE: Initialize conversation in background to "pre-send" context to AI
+            this.initializeConversationWithInsight(userId, pillData).catch(err => 
+              console.error('Proactive initialization failed:', err)
+            );
           }
 
           return {
@@ -243,10 +256,45 @@ class ScannerService {
     }
   }
 
+  /**
+   * Proactively initializes a conversation with an AI insight summary
+   * This "pre-warms" the AI and provides instant responses later
+   */
+  async initializeConversationWithInsight(userId, pillData) {
+    try {
+      const geminiService = require('./geminiService');
+      const ChatMessage = require('../models/ChatMessage');
+      
+      console.log(`[PROACTIVE] Generating background insight for user ${userId} using NVIDIA...`);
+      
+      // Generate the insight using DeepSeek
+      const insight = await geminiService.generateProactiveInsight(pillData);
+      
+      if (insight.success) {
+        const conversationId = `med_${userId}_${Date.now()}`; // New session
+        
+        // Store context in a hidden system message OR just as the first assistant message
+        // Actually, saving it as the first message with context field is best
+        await ChatMessage.create({
+          userId: userId,
+          conversationId: conversationId,
+          content: insight.text,
+          sender: 'assistant',
+          context: { medicine: JSON.stringify(pillData) }
+        });
+        
+        console.log(`[PROACTIVE] Background insight generated and stored in ${conversationId}`);
+        return conversationId;
+      }
+    } catch (error) {
+      console.error('[PROACTIVE] Error in background initialization:', error);
+    }
+  }
+
   // Extract text from document image using Gemini AI OCR
   async extractTextFromDocument(imageBuffer, userId = null) {
     try {
-      console.log('🔍 Processing document with Gemini AI OCR');
+      console.log('🔍 Processing document with AI OCR (NVIDIA Primary)');
       
       // Validate and process image
       const processedImage = await this.processImage(imageBuffer);

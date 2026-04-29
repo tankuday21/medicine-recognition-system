@@ -7,26 +7,39 @@ const initialState = {
   user: null,
   token: localStorage.getItem('token'),
   isLoading: true,
-  isAuthenticated: false
+  isAuthenticated: false,
+  isGuest: localStorage.getItem('mediot_guest_mode') === 'true'
 };
 
 const authReducer = (state, action) => {
   switch (action.type) {
     case 'LOGIN_SUCCESS':
       localStorage.setItem('token', action.payload.token);
+      localStorage.removeItem('mediot_guest_mode'); // Remove guest mode when logging in
       return {
         ...state,
         user: action.payload.user,
         token: action.payload.token,
         isAuthenticated: true,
+        isGuest: false,
         isLoading: false
       };
     case 'LOGOUT':
       localStorage.removeItem('token');
+      localStorage.removeItem('mediot_guest_mode');
       return {
         ...state,
         user: null,
         token: null,
+        isAuthenticated: false,
+        isGuest: false,
+        isLoading: false
+      };
+    case 'SET_GUEST_MODE':
+      localStorage.setItem('mediot_guest_mode', 'true');
+      return {
+        ...state,
+        isGuest: true,
         isAuthenticated: false,
         isLoading: false
       };
@@ -35,15 +48,18 @@ const authReducer = (state, action) => {
         ...state,
         user: action.payload,
         isAuthenticated: true,
+        isGuest: false,
         isLoading: false
       };
     case 'LOAD_USER_FAIL':
       localStorage.removeItem('token');
+      const isGuest = localStorage.getItem('mediot_guest_mode') === 'true';
       return {
         ...state,
         user: null,
         token: null,
         isAuthenticated: false,
+        isGuest: isGuest,
         isLoading: false
       };
     case 'UPDATE_USER':
@@ -95,25 +111,29 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Login failed' 
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Login failed'
       };
     }
   };
 
-  const register = async (userData) => {
+  const register = async (name, email, password) => {
     try {
-      const response = await api.post('/auth/register', userData);
+      const response = await api.post('/auth/register', { name, email, password });
       dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
       return { success: true };
     } catch (error) {
       console.error('Registration error:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Registration failed' 
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Registration failed'
       };
     }
+  };
+
+  const setGuestMode = () => {
+    dispatch({ type: 'SET_GUEST_MODE' });
   };
 
   const logout = () => {
@@ -126,10 +146,10 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: 'UPDATE_USER', payload: response.data.user });
       return { success: true };
     } catch (error) {
-      console.error('Profile update error:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Profile update failed' 
+      console.error('Update profile error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to update profile'
       };
     }
   };
@@ -140,7 +160,8 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     updateProfile,
-    loadUser
+    loadUser,
+    setGuestMode
   };
 
   return (

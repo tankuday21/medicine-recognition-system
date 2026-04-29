@@ -1,47 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import PropTypes from 'prop-types';
-import {
-  MapPinIcon,
-  BuildingStorefrontIcon,
-  PhoneIcon,
-  ClockIcon,
-  StarIcon,
-  GlobeAltIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  AdjustmentsHorizontalIcon
-} from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, PhoneIcon, ClockIcon, StarIcon, GlobeAltIcon, CheckCircleIcon, XCircleIcon, AdjustmentsHorizontalIcon, ArrowTopRightOnSquareIcon, TruckIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const PharmacyFinder = ({ onSearch, results, userLocation, hasLocation, onLocationRefresh }) => {
+  const { t } = useLanguage();
   const [searchParams, setSearchParams] = useState({
-    radius: 10,
-    services: []
+    query: '',
+    radius: 10
   });
-  const [availableServices, setAvailableServices] = useState([]);
-  const [showFilters, setShowFilters] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-
-  useEffect(() => {
-    loadAvailableServices();
-  }, []);
-
-  const loadAvailableServices = async () => {
-    try {
-      const response = await fetch('/api/pharmacy/services');
-      const data = await response.json();
-      if (data.success) {
-        setAvailableServices(data.data);
-      }
-    } catch (error) {
-      console.error('Failed to load services:', error);
-    }
-  };
+  const [isFocused, setIsFocused] = useState(false);
+  const [showRadiusDropdown, setShowRadiusDropdown] = useState(false);
 
   const handleSearch = async () => {
-    if (!hasLocation) {
-      return;
-    }
+    if (!hasLocation) return;
 
     setIsSearching(true);
     try {
@@ -51,30 +26,18 @@ const PharmacyFinder = ({ onSearch, results, userLocation, hasLocation, onLocati
     }
   };
 
-  const handleServiceToggle = (serviceId) => {
-    setSearchParams(prev => ({
-      ...prev,
-      services: prev.services.includes(serviceId)
-        ? prev.services.filter(s => s !== serviceId)
-        : [...prev.services, serviceId]
-    }));
-  };
-
   const getRatingStars = (rating) => {
     const stars = [];
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 >= 0.5;
 
     for (let i = 0; i < 5; i++) {
-      if (i < fullStars) {
-        stars.push(<StarIconSolid key={i} className="h-4 w-4 text-yellow-400" />);
-      } else if (i === fullStars && hasHalfStar) {
-        stars.push(<StarIconSolid key={i} className="h-4 w-4 text-yellow-400" />);
+      if (i < fullStars || (i === fullStars && hasHalfStar)) {
+        stars.push(<StarIconSolid key={i} className="h-3.5 w-3.5 text-amber-400" />);
       } else {
-        stars.push(<StarIcon key={i} className="h-4 w-4 text-gray-300" />);
+        stars.push(<StarIcon key={i} className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600" />);
       }
     }
-
     return stars;
   };
 
@@ -84,274 +47,279 @@ const PharmacyFinder = ({ onSearch, results, userLocation, hasLocation, onLocati
   };
 
   const formatDistance = (distance) => {
-    if (distance < 1) {
-      return `${Math.round(distance * 1000)}m`;
-    }
+    if (!distance) return t('price.online');
+    if (distance < 1) return `${Math.round(distance * 1000)}m`;
     return `${distance}km`;
   };
 
   return (
-    <div>
-      {/* Search Controls */}
-      <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium text-gray-900">Search Filters</h3>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center space-x-2 text-blue-600 hover:text-blue-800"
-          >
-            <AdjustmentsHorizontalIcon className="h-4 w-4" />
-            <span>{showFilters ? 'Hide' : 'Show'} Filters</span>
-          </button>
-        </div>
+    <>
+      {/* Search Bar Overlay Background */}
+      <AnimatePresence>
+        {isFocused && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[55]"
+            onClick={() => setIsFocused(false)}
+          />
+        )}
+      </AnimatePresence>
 
-        {/* Location Status */}
-        <div className="mb-4">
-          {hasLocation ? (
-            <div className="flex items-center space-x-2 text-green-700">
-              <CheckCircleIcon className="h-5 w-5" />
-              <span className="text-sm">Location available for search</span>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-red-700">
-                <XCircleIcon className="h-5 w-5" />
-                <span className="text-sm">Location required to find nearby pharmacies</span>
-              </div>
+      <div className={`relative transition-all duration-500 ease-out z-[60] mb-10 ${isFocused ? '-translate-y-2' : ''}`}>
+        {/* Search Controls Card - Entire card remains sharp and elevated on focus */}
+        <div className={`
+          bg-white dark:bg-slate-900 rounded-[2rem] border transition-all duration-300
+          ${isFocused 
+            ? 'shadow-2xl shadow-primary-500/20 scale-[1.02] border-transparent' 
+            : 'border-slate-100 dark:border-slate-800 shadow-lg shadow-black/5'
+          }
+        `}>
+          <div className="p-5 space-y-5">
+            {/* Pharmacy Name Search Bar */}
+            <div className={`
+              relative flex items-center rounded-2xl transition-all duration-300
+              ${isFocused ? 'bg-slate-50 dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-800/50'}
+            `}>
+              <input
+                type="text"
+                value={searchParams.query}
+                onChange={(e) => setSearchParams(prev => ({ ...prev, query: e.target.value }))}
+                onFocus={() => setIsFocused(true)}
+                className="flex-1 py-3.5 pl-5 pr-2 bg-transparent text-slate-900 dark:text-white font-bold placeholder-slate-400 text-sm"
+                style={{ 
+                  outline: 'none', 
+                  border: 'none', 
+                  boxShadow: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  appearance: 'none'
+                }}
+                placeholder={t('price.searchPharmacyPlaceholder')}
+              />
               <button
-                onClick={onLocationRefresh}
-                className="text-blue-600 hover:text-blue-800 text-sm underline"
+                onClick={() => {
+                  handleSearch();
+                  setIsFocused(false);
+                }}
+                disabled={!hasLocation || isSearching}
+                className="mr-1 w-10 h-10 bg-gradient-to-r from-primary-500 to-cyan-500 text-white rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-primary-500/25 transition-all active:scale-90 flex-shrink-0"
               >
-                Enable Location
+                {isSearching ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <MagnifyingGlassIcon className="w-5 h-5 stroke-[2.5]" />
+                )}
               </button>
             </div>
-          )}
-        </div>
 
-        {/* Basic Search */}
-        <div className="flex items-center space-x-4">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Search Radius
-            </label>
-            <select
-              value={searchParams.radius}
-              onChange={(e) => setSearchParams(prev => ({ ...prev, radius: parseInt(e.target.value) }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value={5}>5 km</option>
-              <option value={10}>10 km</option>
-              <option value={15}>15 km</option>
-              <option value={25}>25 km</option>
-              <option value={50}>50 km</option>
-            </select>
-          </div>
+            {/* Custom Radius Dropdown */}
+            <div className="px-1 relative">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
+                {t('price.searchRadius')}
+              </label>
+              
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowRadiusDropdown(!showRadiusDropdown)}
+                  className={`
+                    w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border rounded-xl text-slate-900 dark:text-white font-bold text-sm flex items-center justify-between transition-all
+                    ${showRadiusDropdown 
+                      ? 'border-primary-500 bg-white dark:bg-slate-900 shadow-lg shadow-primary-500/10' 
+                      : 'border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/80'
+                    }
+                  `}
+                >
+                  <span>{searchParams.radius} km</span>
+                  <motion.div
+                    animate={{ rotate: showRadiusDropdown ? 180 : 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <MapPinIcon className="w-4 h-4 text-slate-400" />
+                  </motion.div>
+                </button>
 
-          <div className="flex-shrink-0">
-            <button
-              onClick={handleSearch}
-              disabled={!hasLocation || isSearching}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isSearching ? (
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Searching...</span>
-                </div>
-              ) : (
-                'Find Pharmacies'
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Advanced Filters */}
-        {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Required Services
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {availableServices.map((service) => (
-                <label key={service.id} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={searchParams.services.includes(service.id)}
-                    onChange={() => handleServiceToggle(service.id)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">{service.name}</span>
-                </label>
-              ))}
+                <AnimatePresence>
+                  {showRadiusDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl z-[80] overflow-hidden"
+                    >
+                      {[5, 10, 15, 25, 50].map((radius) => (
+                        <button
+                          key={radius}
+                          type="button"
+                          onClick={() => {
+                            setSearchParams(prev => ({ ...prev, radius }));
+                            setShowRadiusDropdown(false);
+                          }}
+                          className={`
+                            w-full px-4 py-3 text-left text-sm font-bold transition-colors
+                            ${searchParams.radius === radius
+                              ? 'bg-primary-50 dark:bg-primary-950/20 text-primary-600'
+                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }
+                          `}
+                        >
+                          {radius} km
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Search Results */}
-      {results ? (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-gray-900">
-              Found {results.totalFound} pharmacies within {results.searchRadius}km
+      {/* Results */}
+      <div className={`mt-10 relative z-[10] transition-all duration-300 ${isFocused ? 'blur-[4px] opacity-40' : 'blur-0 opacity-100'}`}>
+        {results ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">
+              {t('price.foundPharmacies', { count: results.totalFound })}
             </h3>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              {t('price.withinRadius', { radius: results.searchRadius })}
+            </span>
           </div>
 
           {results.pharmacies.length > 0 ? (
-            <div className="space-y-4">
-              {results.pharmacies.map((pharmacy) => (
-                <div key={pharmacy.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      {/* Pharmacy Header */}
-                      <div className="flex items-center space-x-3 mb-3">
-                        <BuildingStorefrontIcon className="h-6 w-6 text-blue-600" />
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{pharmacy.name}</h4>
-                          <p className="text-sm text-gray-600">{pharmacy.chain}</p>
-                        </div>
-                        {pharmacy.isOpen && (
-                          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                            Open Now
-                          </span>
-                        )}
+            <div className="space-y-3">
+              {results.pharmacies.map((pharmacy, index) => (
+                <motion.div
+                  key={pharmacy.id || index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.06 }}
+                  className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:border-primary-200 dark:hover:border-primary-900/30 transition-all overflow-hidden"
+                >
+                  <div className="p-5">
+                    {/* Header */}
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className={`p-2.5 rounded-xl ${pharmacy.type === 'online' ? 'bg-blue-50 dark:bg-blue-950/20' : 'bg-primary-50 dark:bg-primary-950/20'}`}>
+                        <BuildingStorefrontIcon className={`w-5 h-5 ${pharmacy.type === 'online' ? 'text-blue-500' : 'text-primary-500'}`} />
                       </div>
-
-                      {/* Pharmacy Details */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <div className="flex items-start space-x-2 mb-2">
-                            <MapPinIcon className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <p className="text-gray-700">{pharmacy.address}</p>
-                              <p className="text-gray-500">
-                                {formatDistance(pharmacy.distance)} away
-                                {pharmacy.estimatedTravelTime && (
-                                  <span> • {pharmacy.estimatedTravelTime.formatted}</span>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center space-x-2 mb-2">
-                            <PhoneIcon className="h-4 w-4 text-gray-400" />
-                            <a
-                              href={`tel:${pharmacy.phone}`}
-                              className="text-blue-600 hover:text-blue-800"
-                            >
-                              {pharmacy.phone}
-                            </a>
-                          </div>
-
-                          {pharmacy.website && (
-                            <div className="flex items-center space-x-2">
-                              <GlobeAltIcon className="h-4 w-4 text-gray-400" />
-                              <a
-                                href={pharmacy.website}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800"
-                              >
-                                Visit Website
-                              </a>
-                            </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-black text-slate-900 dark:text-white truncate">
+                            {pharmacy.name}
+                          </h4>
+                          {pharmacy.type === 'online' && (
+                            <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-[9px] font-black uppercase tracking-widest rounded-md border border-blue-100 dark:border-blue-900/30 flex-shrink-0">
+                              {t('price.online')}
+                            </span>
                           )}
                         </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{pharmacy.chain}</p>
+                      </div>
+                      {pharmacy.isOpen && (
+                        <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-emerald-100 dark:border-emerald-900/30 flex-shrink-0">
+                          {t('price.open')}
+                        </span>
+                      )}
+                    </div>
 
+                    {/* Info Grid */}
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
+                        <MapPinIcon className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
                         <div>
-                          {/* Rating */}
-                          <div className="flex items-center space-x-2 mb-2">
-                            <div className="flex items-center">
-                              {getRatingStars(pharmacy.rating)}
-                            </div>
-                            <span className="text-gray-600">
-                              {pharmacy.rating} ({pharmacy.reviewCount} reviews)
-                            </span>
-                          </div>
-
-                          {/* Services */}
-                          <div className="mb-2">
-                            <p className="font-medium text-gray-700 mb-1">Services:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {pharmacy.services.slice(0, 3).map((service) => (
-                                <span
-                                  key={service}
-                                  className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
-                                >
-                                  {availableServices.find(s => s.id === service)?.name || service}
-                                </span>
-                              ))}
-                              {pharmacy.services.length > 3 && (
-                                <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
-                                  +{pharmacy.services.length - 3} more
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Additional Features */}
-                          <div className="space-y-1">
-                            {pharmacy.hasOnlineOrdering && (
-                              <div className="flex items-center space-x-2">
-                                <GlobeAltIcon className="h-4 w-4 text-green-500" />
-                                <span className="text-green-700 text-sm">Online Ordering</span>
-                              </div>
-                            )}
-                            {pharmacy.acceptsInsurance && (
-                              <div className="flex items-center space-x-2">
-                                <CheckCircleIcon className="h-4 w-4 text-blue-500" />
-                                <span className="text-blue-700 text-sm">Accepts Insurance</span>
-                              </div>
-                            )}
-                            {pharmacy.membershipRequired && (
-                              <div className="flex items-center space-x-2">
-                                <ClockIcon className="h-4 w-4 text-orange-500" />
-                                <span className="text-orange-700 text-sm">Membership Required</span>
-                              </div>
-                            )}
-                          </div>
+                          <p className="text-xs font-medium">{pharmacy.address}</p>
+                          {pharmacy.distance && (
+                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                              {formatDistance(pharmacy.distance)} {t('price.away')}
+                              {pharmacy.estimatedTravelTime && ` • ${pharmacy.estimatedTravelTime.formatted}`}
+                            </p>
+                          )}
                         </div>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex">{getRatingStars(pharmacy.rating)}</div>
+                          <span className="text-[10px] text-slate-400 font-bold">({pharmacy.reviewCount})</span>
+                        </div>
+                      </div>
+
+                      {/* Features */}
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {pharmacy.hours?.is24x7 && (
+                          <span className="px-2.5 py-1 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 text-[10px] font-black uppercase tracking-widest rounded-lg border border-purple-100 dark:border-purple-900/30">
+                            24×7
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="ml-6 flex flex-col space-y-2">
-                      <a
-                        href={getDirectionsUrl(pharmacy)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors text-center"
-                      >
-                        Get Directions
-                      </a>
-                      
-                      <a
-                        href={`tel:${pharmacy.phone}`}
-                        className="px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors text-center"
-                      >
-                        Call Now
-                      </a>
+                    <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                      {pharmacy.type !== 'online' && (
+                        <a
+                          href={getDirectionsUrl(pharmacy)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-primary-500 to-cyan-500 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:shadow-lg hover:shadow-primary-500/25 transition-all active:scale-[0.98]"
+                        >
+                          <MapPinIcon className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>{t('price.directions')}</span>
+                        </a>
+                      )}
+
+                      {pharmacy.website && (
+                        <a
+                          href={pharmacy.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`${pharmacy.type === 'online' ? 'flex-1' : ''} flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-[0.98]`}
+                        >
+                          <GlobeAltIcon className="w-3.5 h-3.5" />
+                          <span>{t('price.visit')}</span>
+                        </a>
+                      )}
+
+                      {pharmacy.phone && (
+                        <a
+                          href={`tel:${pharmacy.phone}`}
+                          className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-[0.98]"
+                        >
+                          <PhoneIcon className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 bg-gray-50 border border-gray-200 rounded-lg">
-              <BuildingStorefrontIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-500">No pharmacies found in your area</p>
-              <p className="text-sm text-gray-400 mt-1">Try increasing the search radius</p>
+            <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800">
+              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] flex items-center justify-center mx-auto mb-4">
+                <BuildingStorefrontIcon className="h-8 w-8 text-slate-400" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white mb-1">{t('price.noPharmaciesFound')}</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">{t('price.increaseRadius')}</p>
             </div>
           )}
         </div>
       ) : (
-        <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-lg">
-          <BuildingStorefrontIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-500">Search for nearby pharmacies</p>
-          <p className="text-sm text-gray-400 mt-1">Enable location and click "Find Pharmacies" to get started</p>
+        <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800">
+          <div className="w-20 h-20 bg-gradient-to-br from-primary-50 to-cyan-50 dark:from-primary-950/30 dark:to-cyan-950/30 rounded-[1.5rem] flex items-center justify-center mx-auto mb-5 -rotate-6">
+            <BuildingStorefrontIcon className="h-10 w-10 text-primary-500 rotate-6" />
+          </div>
+          <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">{t('price.findNearbyTitle')}</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs mx-auto font-medium">
+            {t('price.findNearbySubtitle')}
+          </p>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

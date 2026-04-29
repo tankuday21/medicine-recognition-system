@@ -54,39 +54,39 @@ const ReminderCard = ({ reminder, onEdit, onDelete, onToggleActive, onViewDetail
       reminder.isActive ? 'border-gray-200' : 'border-gray-300 opacity-75'
     }`}>
       {/* Main Content */}
-      <div className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start space-x-3 flex-1">
-            <div className={`p-2 rounded-lg ${
+      <div className="p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="flex items-start space-x-3 flex-1 min-w-0">
+            <div className={`p-2 rounded-lg flex-shrink-0 ${
               reminder.isActive ? 'bg-blue-100' : 'bg-gray-100'
             }`}>
-              <BeakerIcon className={`h-5 w-5 ${
+              <BeakerIcon className={`h-4 w-4 sm:h-5 sm:w-5 ${
                 reminder.isActive ? 'text-blue-600' : 'text-gray-400'
               }`} />
             </div>
             
             <div className="flex-1 min-w-0">
               <div className="flex items-center space-x-2 mb-1">
-                <h3 className="font-semibold text-gray-900 truncate">
+                <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
                   {reminder.medicineName}
                 </h3>
                 {!reminder.isActive && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 flex-shrink-0">
                     Paused
                   </span>
                 )}
               </div>
               
-              <p className="text-sm text-gray-600 mb-2">
+              <p className="text-xs sm:text-sm text-gray-600 mb-2">
                 {reminder.dosage} • {getFrequencyLabel(reminder.frequency)}
               </p>
               
-              <div className="flex items-center space-x-4 text-sm text-gray-500">
-                <span>Times: {reminder.times.map(formatTime).join(', ')}</span>
+              <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-500">
+                <span className="truncate max-w-[150px] sm:max-w-none">Times: {reminder.times.map(formatTime).join(', ')}</span>
                 {reminder.adherencePercentage !== undefined && (
                   <>
-                    <span>•</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getAdherenceColor(reminder.adherencePercentage)}`}>
+                    <span className="hidden sm:inline">•</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getAdherenceColor(reminder.adherencePercentage)}`}>
                       {reminder.adherencePercentage}% adherence
                     </span>
                   </>
@@ -96,10 +96,10 @@ const ReminderCard = ({ reminder, onEdit, onDelete, onToggleActive, onViewDetail
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center space-x-2 ml-4">
+          <div className="flex items-center space-x-1 sm:space-x-2 self-end sm:self-start ml-auto sm:ml-4">
             <button
               onClick={() => onToggleActive(reminder._id, !reminder.isActive)}
-              className={`p-2 rounded-full transition-colors ${
+              className={`p-2 rounded-full transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center ${
                 reminder.isActive 
                   ? 'text-yellow-600 hover:bg-yellow-50' 
                   : 'text-green-600 hover:bg-green-50'
@@ -115,7 +115,7 @@ const ReminderCard = ({ reminder, onEdit, onDelete, onToggleActive, onViewDetail
             
             <button
               onClick={() => onEdit(reminder)}
-              className="p-2 text-gray-600 hover:bg-gray-50 rounded-full transition-colors"
+              className="p-2 text-gray-600 hover:bg-gray-50 rounded-full transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               title="Edit reminder"
             >
               <PencilIcon className="h-4 w-4" />
@@ -123,7 +123,7 @@ const ReminderCard = ({ reminder, onEdit, onDelete, onToggleActive, onViewDetail
             
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 text-gray-600 hover:bg-gray-50 rounded-full transition-colors"
+              className="p-2 text-gray-600 hover:bg-gray-50 rounded-full transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               title="View details"
             >
               <ChartBarIcon className="h-4 w-4" />
@@ -131,7 +131,7 @@ const ReminderCard = ({ reminder, onEdit, onDelete, onToggleActive, onViewDetail
             
             <button
               onClick={() => onDelete(reminder._id)}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+              className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               title="Delete reminder"
             >
               <TrashIcon className="h-4 w-4" />
@@ -141,8 +141,8 @@ const ReminderCard = ({ reminder, onEdit, onDelete, onToggleActive, onViewDetail
 
         {/* Expanded Details */}
         {isExpanded && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
               <div>
                 <h4 className="font-medium text-gray-900 mb-2">Schedule Details</h4>
                 <dl className="space-y-1">
@@ -183,9 +183,9 @@ const ReminderCard = ({ reminder, onEdit, onDelete, onToggleActive, onViewDetail
             </div>
             
             {reminder.notes && (
-              <div className="mt-4">
-                <h4 className="font-medium text-gray-900 mb-2">Notes</h4>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">
+              <div className="mt-3 sm:mt-4">
+                <h4 className="font-medium text-gray-900 mb-2 text-xs sm:text-sm">Notes</h4>
+                <p className="text-xs sm:text-sm text-gray-700 bg-gray-50 p-2 sm:p-3 rounded-lg">
                   {reminder.notes}
                 </p>
               </div>
