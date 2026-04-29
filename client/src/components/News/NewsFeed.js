@@ -82,12 +82,15 @@ const NewsFeed = ({ searchQuery = '', selectedCategory = 'health', selectedCount
     loadNews(1, true);
   }, [searchQuery, selectedCategory, selectedCountry]);
 
+  const attemptedSummarizeRef = useRef(false);
+
   // Pre-summarize first 10 articles in the background
   useEffect(() => {
     const triggerPreSummarize = async () => {
-      if (articles.length >= 5 && Object.keys(initialSummaries).length === 0 && !isPreSummarizing) {
+      if (articles.length >= 5 && Object.keys(initialSummaries).length === 0 && !isPreSummarizing && !attemptedSummarizeRef.current) {
         try {
           setIsPreSummarizing(true);
+          attemptedSummarizeRef.current = true;
           const batch = articles.slice(0, 10);
           console.log('🤖 Background: Pre-summarizing 10 articles for Snips...');
           const response = await api.post('/news/summarize', { articles: batch });
@@ -101,7 +104,7 @@ const NewsFeed = ({ searchQuery = '', selectedCategory = 'health', selectedCount
               }
             });
             setInitialSummaries(newSummaries);
-            console.log('✅ Background: Pre-summarization complete.');
+            console.log(`✅ Background: Pre-summarization complete (${Object.keys(newSummaries).length} articles).`);
           }
         } catch (err) {
           console.warn('Background summarization failed:', err.message);

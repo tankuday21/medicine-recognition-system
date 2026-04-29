@@ -196,16 +196,16 @@ class GeminiService {
 
       const prompt = `
         You are a premium medical news editor. I will provide you with a list of ${articles.length} news articles.
-        Your task is to create a compelling, editorial-style summary for each one (approximately 40-60 words).
+        Your task is to create an extremely concise, "one-liner" summary for each one (strictly between 5 to 8 words).
         
         Style Guidelines:
-        1. Professional & Engaging: Write like a high-end medical magazine.
-        2. Informative: Include key facts, data, or the "bottom line" for patients.
-        3. Clear Structure: Start with a punchy opening and follow with the essential takeaway.
-        4. Mobile-First: Ensure the flow is smooth for a vertical reading experience.
+        1. Ultra-Short: Must be between 5 and 8 words maximum.
+        2. Impactful: Capture only the most critical "bottom line" health takeaway.
+        3. Professional: Keep it medical but very punchy.
+        4. Mobile-First: Designed for quick scanning on a phone screen.
 
         Return ONLY a JSON array of strings, where each string corresponds to the summary of the article at that index.
-        Example: ["Researchers have discovered a breakthrough in Alzheimer's treatment using a new class of antibodies. The phase 3 clinical trial showed a 30% reduction in memory decline over 18 months, marking a significant milestone in neurodegenerative care. This drug is now awaiting FDA priority review.", ...]
+        Example: ["New antibody shows promise in Alzheimer's treatment.", "FDA approves faster acting diabetes insulin drug.", "Daily exercise reduces heart disease risk significantly."]
 
         Articles:
         ${articlesText}
@@ -222,11 +222,18 @@ class GeminiService {
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1,
           max_tokens: 4096,
+          // Disable thinking/reasoning to get clean JSON
+          reasoning_budget: 0,
+          chat_template_kwargs: {"enable_thinking": false}
         });
         const responseText = nvidiaResult.choices[0].message.content;
         summaries = this._extractJsonArray(responseText);
-        if (summaries) {
-          console.log(`[AI-NEWS] Summarization successful with NVIDIA`);
+        
+        if (summaries && summaries.length > 0) {
+          console.log(`[AI-NEWS] Summarization successful with NVIDIA (${summaries.length} articles)`);
+        } else {
+          console.warn(`[AI-NEWS] NVIDIA returned empty or invalid summaries, falling back...`);
+          summaries = null; // Trigger fallback
         }
       } catch (nvidiaError) {
         console.warn(`[AI-NEWS] NVIDIA failed for summarization, falling back to SambaNova/Gemini:`, nvidiaError.message);
@@ -253,7 +260,8 @@ class GeminiService {
               });
               const responseText = completion.choices[0].message.content;
               summaries = this._extractJsonArray(responseText);
-              if (summaries) break; // Success!
+              if (summaries && summaries.length > 0) break; // Success!
+              summaries = null; // Reset for next attempt or fallback
             } catch (sambaError) {
               console.warn(`[AI-NEWS] SambaNova Key ${i + 1} failed:`, sambaError.message);
               
@@ -273,7 +281,7 @@ class GeminiService {
         }
       }
 
-      if (usedFallback || !summaries) {
+      if (usedFallback || !summaries || summaries.length === 0) {
         console.log(`[AI-NEWS] Using Gemini for summarization...`);
         const result = await this.generateContentWithFallback(prompt);
         const response = await result.response;
@@ -297,17 +305,39 @@ class GeminiService {
       if (!text) return [];
       
       // Remove potential markdown code blocks
-      const cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      
+      // Remove <thought> tags if present
+      cleanedText = cleanedText.replace(/<thought>[\s\S]*?<\/thought>/g, '').trim();
 
       const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        try {
+          return JSON.parse(jsonMatch[0]);
+        } catch (parseError) {
+          console.warn('[WARN] JSON array parse failed, attempting deep clean:', parseError.message);
+          // Try to clean trailing commas and other common issues
+          const deepCleaned = jsonMatch[0]
+            .replace(/,\s*\]/g, ']')
+            .replace(/,\s*}/g, '}')
+            .replace(/'/g, '"');
+          try {
+            return JSON.parse(deepCleaned);
+          } catch (e) {
+             console.error('[ERROR] Deep clean also failed');
+          }
+        }
       }
-      throw new Error('No JSON array found');
-    } catch (e) {
-      console.warn('[WARN] JSON array extraction failed:', e.message);
+      
+      console.warn('[WARN] No JSON array found in response, falling back to line splitting');
       // Fallback: split by lines if it looks like a list
-      return text.split('\n').filter(line => line.trim().length > 10).slice(0, 10);
+      return text.split('\n')
+        .map(line => line.replace(/^\d+\.\s*/, '').trim()) // Remove leading numbers
+        .filter(line => line.length > 20 && !line.startsWith('{') && !line.startsWith('['))
+        .slice(0, 10);
+    } catch (e) {
+      console.error('[ERROR] JSON array extraction failed:', e.message);
+      return [];
     }
   }
 
