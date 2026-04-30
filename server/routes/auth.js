@@ -21,9 +21,21 @@ router.post('/register', async (req, res) => {
 
     // Validate required fields
     if (!email || !password || !name) {
+      console.warn('[AUTH] Registration failed: Missing fields', { 
+        hasEmail: !!email, 
+        hasPassword: !!password, 
+        hasName: !!name,
+        bodyKeys: Object.keys(req.body)
+      });
+      
+      const missing = [];
+      if (!email) missing.push('email');
+      if (!password) missing.push('password');
+      if (!name) missing.push('name');
+      
       return res.status(400).json({
         error: 'Validation error',
-        message: 'Email, password, and name are required'
+        message: `${missing.join(', ')} ${missing.length > 1 ? 'are' : 'is'} required`
       });
     }
 

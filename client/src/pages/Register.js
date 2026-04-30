@@ -83,6 +83,12 @@ const Register = () => {
       return;
     }
 
+    if (!formData.name || !formData.email || !formData.password) {
+      setError(t('auth.errorMissingFields') || 'Name, email and password are required');
+      setIsLoading(false);
+      return;
+    }
+
     if (formData.password.length < 6) {
       setError(t('auth.errorPasswordTooShort'));
       setIsLoading(false);
@@ -90,12 +96,19 @@ const Register = () => {
     }
 
     const userData = {
-      name: formData.name,
-      email: formData.email,
+      name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
       password: formData.password,
       dateOfBirth: formData.dateOfBirth || undefined,
       gender: formData.gender || undefined
     };
+
+    console.log('[DEBUG] Registering with data:', { 
+      name: userData.name, 
+      email: userData.email,
+      hasPassword: !!userData.password,
+      passwordLength: userData.password.length
+    });
 
     try {
       const result = await register(userData);
