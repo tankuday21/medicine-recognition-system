@@ -1,10 +1,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../contexts/LanguageContext';
 import { ArrowLeftIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import { BackButton } from '../components/ui/PremiumComponents';
 
 const Privacy = () => {
     const navigate = useNavigate();
+    const { t } = useLanguage();
 
     const Section = ({ title, children }) => (
         <div className="mb-8">
