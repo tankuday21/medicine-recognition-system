@@ -465,6 +465,22 @@ body {
     box-shadow: 0 0 0 3px rgba(12, 171, 228, 0.1);
     outline: none;
   }
+
+  /* Performance Boost: Simplify heavy effects on mobile */
+  .glass, .glass-dark, .bottom-nav-glass, .header-glass {
+    backdrop-filter: blur(8px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(150%) !important;
+  }
+
+  .card-premium, .card-base, .glass-panel {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    will-change: transform; /* Hardware acceleration hint */
+  }
+
+  /* Reduce complexity of mesh gradients */
+  .gradient-mesh {
+    background: radial-gradient(at 40% 20%, rgba(12, 171, 228, 0.1) 0px, transparent 50%);
+  }
 }
 
 /* ========================================

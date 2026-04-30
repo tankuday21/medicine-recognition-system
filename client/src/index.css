@@ -822,3 +822,55 @@
 .feature-card-hover:active {
   transform: scale(0.98);
 }
+
+/* ========================================
+   GLOBAL MOBILE PERFORMANCE OPTIMIZATIONS
+   ======================================== */
+@media (max-width: 768px) {
+  /* Reduce GPU load from blur effects */
+  .glass-panel, .nav-bottom, .header-glass, .bottom-nav-glass {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    transform: translateZ(0);
+  }
+
+  /* Simplify shadows to reduce paint time */
+  .shadow-premium, .shadow-premium-lg, .card-base, .card-elevated {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  }
+
+  /* Smoother transitions hint */
+  .transition-all, .transition-transform {
+    will-change: transform, opacity;
+  }
+  
+  /* Disable hover effects on touch devices to prevent "stuck" states */
+  .glass-card-hover:hover, .card-interactive:hover {
+    transform: none !important;
+  }
+  
+  /* Use hardware acceleration for the logo animation video */
+  video {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  /* Improve scrolling performance by allowing browsers to skip rendering off-screen components */
+  .section-spacing, .grid-responsive, .space-y-6 {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 500px;
+  }
+}
+
+/* ========================================
+   GLOBAL PERFORMANCE TWEAKS (All Devices)
+   ======================================== */
+img {
+  content-visibility: auto;
+}
+
+.framer-motion-container {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000;
+}

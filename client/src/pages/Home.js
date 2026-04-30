@@ -131,7 +131,7 @@ const Home = () => {
             className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-900 shadow-premium border border-gray-100 dark:border-slate-800 flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
           >
             {user?.photoURL ? (
-              <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-2xl object-cover" />
+              <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-2xl object-cover" loading="lazy" />
             ) : (
               <UserCircleIcon className="w-7 h-7 text-slate-400" />
             )}
@@ -189,6 +189,8 @@ const Home = () => {
                   src={medicalHeroIcon} 
                   alt="Hero Visual" 
                   className="w-full h-full object-contain drop-shadow-xl sm:drop-shadow-2xl rounded-full"
+                  loading="lazy"
+                  decoding="async"
                 />
               </motion.div>
             </div>
@@ -240,6 +242,8 @@ const Home = () => {
                   src={action.image}
                   alt={action.title}
                   className="w-16 h-16 object-contain drop-shadow-md rounded-2xl transition-transform duration-300 group-hover:scale-110"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
 
