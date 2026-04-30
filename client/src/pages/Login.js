@@ -72,7 +72,23 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+
+    // Validate required fields
+    if (!formData.email || !formData.password) {
+      console.warn('[AUTH] Login failed: Missing fields', { 
+        hasEmail: !!formData.email, 
+        hasPassword: !!formData.password
+      });
+
+      setError(t('auth.errorMissingFields') || 'Email and password are required');
+      setIsLoading(false);
+      return;
+    }
+
+    console.log('[DEBUG] Logging in with:', { 
+      email: formData.email.trim().toLowerCase(),
+      hasPassword: !!formData.password 
+    });
 
     try {
       const result = await login(formData.email, formData.password);

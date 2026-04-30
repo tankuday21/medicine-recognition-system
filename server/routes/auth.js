@@ -83,9 +83,19 @@ router.post('/login', async (req, res) => {
 
     // Validate required fields
     if (!email || !password) {
+      console.warn('[AUTH] Login failed: Missing fields', { 
+        hasEmail: !!email, 
+        hasPassword: !!password,
+        bodyKeys: Object.keys(req.body)
+      });
+
+      const missing = [];
+      if (!email) missing.push('email');
+      if (!password) missing.push('password');
+
       return res.status(400).json({
         error: 'Validation error',
-        message: 'Email and password are required'
+        message: `${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} required`
       });
     }
 
